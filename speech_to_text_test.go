@@ -175,6 +175,67 @@ func TestCreateTranscriptWithResponseReturnsRawMetadata(t *testing.T) {
 	}
 }
 
+func TestCreateTranscriptReportsUploadProgress(t *testing.T) {
+	ctx := context.Background()
+	audio := "audio-bytes"
+	var progress []UploadProgress
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, body := readMultipartFile(t, r)
+		if body != audio {
+			t.Fatalf("file body = %q, want %q", body, audio)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"text":"progress"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	_, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+		ModelID: "scribe_v1",
+		File: &File{
+			Name:      "sample.mp3",
+			Reader:    strings.NewReader(audio),
+			SizeBytes: int64(len(audio)),
+		},
+		OnUploadProgress: func(update UploadProgress) {
+			progress = append(progress, update)
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscript returned error: %v", err)
+	}
+	if len(progress) < 3 {
+		t.Fatalf("progress events = %v, want initial, read, and done events", progress)
+	}
+
+	first := progress[0]
+	if first.SentBytes != 0 || first.TotalBytes != int64(len(audio)) || first.Done || first.Attempt != 1 {
+		t.Fatalf("first progress = %+v, want initial event for attempt 1", first)
+	}
+
+	last := progress[len(progress)-1]
+	if last.SentBytes != int64(len(audio)) || last.TotalBytes != int64(len(audio)) || !last.Done || last.Attempt != 1 {
+		t.Fatalf("last progress = %+v, want completed event for attempt 1", last)
+	}
+
+	var previous int64
+	for _, update := range progress {
+		if update.Attempt != 1 {
+			t.Fatalf("progress attempt = %d, want 1", update.Attempt)
+		}
+		if update.TotalBytes != int64(len(audio)) {
+			t.Fatalf("progress total = %d, want %d", update.TotalBytes, len(audio))
+		}
+		if update.SentBytes < previous {
+			t.Fatalf("progress went backwards: %v", progress)
+		}
+		previous = update.SentBytes
+	}
+}
+
 func TestCreateTranscriptAcceptsSourceURL(t *testing.T) {
 	ctx := context.Background()
 
@@ -212,6 +273,37 @@ func TestCreateTranscriptAcceptsSourceURL(t *testing.T) {
 	}
 	if transcript.Text != "from url" {
 		t.Fatalf("Text = %q, want from url", transcript.Text)
+	}
+}
+
+func TestCreateTranscriptDoesNotReportUploadProgressForSourceURL(t *testing.T) {
+	ctx := context.Background()
+	var progress []UploadProgress
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form := readMultipartForm(t, r)
+		assertFormValue(t, form.Value, "model_id", "scribe_v1")
+		assertFormValue(t, form.Value, "source_url", "https://example.com/audio.mp3")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"text":"from url"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	_, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+		ModelID:   "scribe_v1",
+		SourceURL: "https://example.com/audio.mp3",
+		OnUploadProgress: func(update UploadProgress) {
+			progress = append(progress, update)
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscript returned error: %v", err)
+	}
+	if len(progress) != 0 {
+		t.Fatalf("progress events = %v, want none", progress)
 	}
 }
 

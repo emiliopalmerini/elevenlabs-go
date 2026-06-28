@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -19,6 +20,20 @@ import (
 type File struct {
 	Name   string
 	Reader io.Reader
+
+	// SizeBytes is the total upload size reported in progress callbacks. When
+	// it is not positive, the client attempts to infer the size from Reader.
+	SizeBytes int64
+}
+
+// UploadProgress reports uploaded file bytes for a transcript request.
+type UploadProgress struct {
+	SentBytes int64
+	// TotalBytes is -1 when the upload size cannot be determined.
+	TotalBytes int64
+	Done       bool
+	// Attempt starts at 1 and increments when a replayable upload is retried.
+	Attempt int
 }
 
 // CreateTranscriptRequest contains parameters for creating a speech-to-text
@@ -54,6 +69,8 @@ type CreateTranscriptRequest struct {
 	EntityRedactionMode     string
 	Keyterms                []string
 	ExtraFormFields         map[string][]string
+
+	OnUploadProgress func(UploadProgress)
 }
 
 // Transcript is a speech-to-text transcript response.
@@ -189,8 +206,10 @@ func (c *Client) SubmitTranscriptWebhookWithResponse(ctx context.Context, in Cre
 
 func (c *Client) doCreateTranscript(ctx context.Context, in CreateTranscriptRequest, out any) (RawResponse, error) {
 	body := createTranscriptBody(in)
+	attempt := 0
 	build := func(ctx context.Context) (*http.Request, error) {
-		reader, err := body.newReader()
+		attempt++
+		reader, err := body.newReader(attempt)
 		if err != nil {
 			return nil, err
 		}
@@ -336,7 +355,7 @@ func validateCreateTranscriptRequest(in CreateTranscriptRequest) error {
 }
 
 type transcriptBody struct {
-	newReader   func() (io.Reader, error)
+	newReader   func(attempt int) (io.Reader, error)
 	contentType string
 	retryable   bool
 }
@@ -348,8 +367,8 @@ func createTranscriptBody(in CreateTranscriptRequest) transcriptBody {
 
 	if in.File == nil {
 		return transcriptBody{
-			newReader: func() (io.Reader, error) {
-				return createTranscriptBufferedBody(in, boundary)
+			newReader: func(attempt int) (io.Reader, error) {
+				return createTranscriptBufferedBody(in, boundary, attempt)
 			},
 			contentType: contentType,
 			retryable:   true,
@@ -358,11 +377,11 @@ func createTranscriptBody(in CreateTranscriptRequest) transcriptBody {
 
 	if seeker, ok := in.File.Reader.(io.ReadSeeker); ok {
 		return transcriptBody{
-			newReader: func() (io.Reader, error) {
+			newReader: func(attempt int) (io.Reader, error) {
 				if _, err := seeker.Seek(0, io.SeekStart); err != nil {
 					return nil, fmt.Errorf("seek file: %w", err)
 				}
-				return createTranscriptStreamingBody(in, boundary)
+				return createTranscriptStreamingBody(in, boundary, attempt)
 			},
 			contentType: contentType,
 			retryable:   true,
@@ -371,25 +390,25 @@ func createTranscriptBody(in CreateTranscriptRequest) transcriptBody {
 
 	used := false
 	return transcriptBody{
-		newReader: func() (io.Reader, error) {
+		newReader: func(attempt int) (io.Reader, error) {
 			if used {
 				return nil, errors.New("elevenlabs: transcript file reader is not replayable")
 			}
 			used = true
-			return createTranscriptStreamingBody(in, boundary)
+			return createTranscriptStreamingBody(in, boundary, attempt)
 		},
 		contentType: contentType,
 		retryable:   false,
 	}
 }
 
-func createTranscriptBufferedBody(in CreateTranscriptRequest, boundary string) (io.Reader, error) {
+func createTranscriptBufferedBody(in CreateTranscriptRequest, boundary string, attempt int) (io.Reader, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	if err := mw.SetBoundary(boundary); err != nil {
 		return nil, err
 	}
-	if err := writeCreateTranscriptForm(mw, in); err != nil {
+	if err := writeCreateTranscriptForm(mw, in, attempt); err != nil {
 		_ = mw.Close()
 		return nil, err
 	}
@@ -400,7 +419,7 @@ func createTranscriptBufferedBody(in CreateTranscriptRequest, boundary string) (
 	return bytes.NewReader(buf.Bytes()), nil
 }
 
-func createTranscriptStreamingBody(in CreateTranscriptRequest, boundary string) (io.Reader, error) {
+func createTranscriptStreamingBody(in CreateTranscriptRequest, boundary string, attempt int) (io.Reader, error) {
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	if err := mw.SetBoundary(boundary); err != nil {
@@ -410,7 +429,7 @@ func createTranscriptStreamingBody(in CreateTranscriptRequest, boundary string) 
 	}
 
 	go func() {
-		err := writeCreateTranscriptForm(mw, in)
+		err := writeCreateTranscriptForm(mw, in, attempt)
 		closeErr := mw.Close()
 		if err != nil {
 			_ = pw.CloseWithError(err)
@@ -426,7 +445,7 @@ func createTranscriptStreamingBody(in CreateTranscriptRequest, boundary string) 
 	return pr, nil
 }
 
-func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest) error {
+func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest, attempt int) error {
 	if err := mw.WriteField("model_id", in.ModelID); err != nil {
 		return err
 	}
@@ -563,8 +582,18 @@ func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest)
 		if err != nil {
 			return err
 		}
-		if _, err := io.Copy(part, in.File.Reader); err != nil {
+		reader := in.File.Reader
+		var progress *uploadProgressReader
+		if in.OnUploadProgress != nil {
+			progress = newUploadProgressReader(reader, uploadTotalBytes(in.File), attempt, in.OnUploadProgress)
+			progress.reportProgress(false)
+			reader = progress
+		}
+		if _, err := io.Copy(part, reader); err != nil {
 			return fmt.Errorf("copy file: %w", err)
+		}
+		if progress != nil {
+			progress.reportProgress(true)
 		}
 	}
 
@@ -583,4 +612,68 @@ func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest)
 	}
 
 	return nil
+}
+
+type uploadProgressReader struct {
+	reader  io.Reader
+	sent    int64
+	total   int64
+	attempt int
+	report  func(UploadProgress)
+}
+
+func newUploadProgressReader(reader io.Reader, total int64, attempt int, report func(UploadProgress)) *uploadProgressReader {
+	if attempt <= 0 {
+		attempt = 1
+	}
+	return &uploadProgressReader{
+		reader:  reader,
+		total:   total,
+		attempt: attempt,
+		report:  report,
+	}
+}
+
+func (r *uploadProgressReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	if n > 0 {
+		r.sent += int64(n)
+		r.reportProgress(false)
+	}
+	return n, err
+}
+
+func (r *uploadProgressReader) reportProgress(done bool) {
+	r.report(UploadProgress{
+		SentBytes:  r.sent,
+		TotalBytes: r.total,
+		Done:       done,
+		Attempt:    r.attempt,
+	})
+}
+
+func uploadTotalBytes(file *File) int64 {
+	if file == nil || file.Reader == nil {
+		return -1
+	}
+	if file.SizeBytes > 0 {
+		return file.SizeBytes
+	}
+	if lenReader, ok := file.Reader.(interface{ Len() int }); ok {
+		if length := lenReader.Len(); length >= 0 {
+			return int64(length)
+		}
+	}
+	if sizeReader, ok := file.Reader.(interface{ Size() int64 }); ok {
+		if size := sizeReader.Size(); size >= 0 {
+			return size
+		}
+	}
+	if statReader, ok := file.Reader.(interface{ Stat() (fs.FileInfo, error) }); ok {
+		info, err := statReader.Stat()
+		if err == nil {
+			return info.Size()
+		}
+	}
+	return -1
 }

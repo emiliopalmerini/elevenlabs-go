@@ -340,6 +340,75 @@ func TestCreateTranscriptRetriesSeekableFile(t *testing.T) {
 	}
 }
 
+func TestCreateTranscriptProgressReportsRetryAttempts(t *testing.T) {
+	ctx := context.Background()
+	audio := "audio-bytes"
+	var attempts atomic.Int32
+	var progress []UploadProgress
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempt := attempts.Add(1)
+		_, body := readMultipartFile(t, r)
+		if body != audio {
+			t.Fatalf("file body = %q, want %q", body, audio)
+		}
+
+		if attempt == 1 {
+			http.Error(w, `{"detail":{"message":"temporary"}}`, http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"text":"from seekable file after retry"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(
+		"test-key",
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
+		WithRetryConfig(fastRetryConfig(2)),
+	)
+
+	_, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+		ModelID: "scribe_v1",
+		File: &File{
+			Name:      "sample.mp3",
+			Reader:    strings.NewReader(audio),
+			SizeBytes: int64(len(audio)),
+		},
+		OnUploadProgress: func(update UploadProgress) {
+			progress = append(progress, update)
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscript returned error: %v", err)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts.Load())
+	}
+
+	var doneAttempts []int
+	initialByAttempt := map[int]UploadProgress{}
+	for _, update := range progress {
+		if update.SentBytes == 0 {
+			initialByAttempt[update.Attempt] = update
+		}
+		if update.Done {
+			doneAttempts = append(doneAttempts, update.Attempt)
+		}
+	}
+	if _, ok := initialByAttempt[1]; !ok {
+		t.Fatalf("progress events = %v, want initial event for attempt 1", progress)
+	}
+	if _, ok := initialByAttempt[2]; !ok {
+		t.Fatalf("progress events = %v, want initial event for attempt 2", progress)
+	}
+	if len(doneAttempts) != 2 || doneAttempts[0] != 1 || doneAttempts[1] != 2 {
+		t.Fatalf("done attempts = %v, want [1 2]", doneAttempts)
+	}
+}
+
 type nonSeekableReader struct {
 	r *strings.Reader
 }
