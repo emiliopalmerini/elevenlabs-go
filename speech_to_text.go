@@ -87,6 +87,15 @@ type Transcript struct {
 	Transcripts         []Transcript                 `json:"transcripts,omitempty"`
 }
 
+// Chunks returns the channel-level transcripts when present, otherwise the
+// transcript itself as a single chunk.
+func (t Transcript) Chunks() []Transcript {
+	if len(t.Transcripts) > 0 {
+		return t.Transcripts
+	}
+	return []Transcript{t}
+}
+
 // TranscriptWord is a word-level transcript segment.
 type TranscriptWord struct {
 	Text         string                `json:"text"`

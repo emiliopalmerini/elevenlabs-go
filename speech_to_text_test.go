@@ -432,6 +432,62 @@ func TestCreateTranscriptParsesMultichannelResponse(t *testing.T) {
 	}
 }
 
+func TestTranscriptChunksReturnsSingleTranscript(t *testing.T) {
+	transcript := Transcript{
+		LanguageCode:        "en",
+		LanguageProbability: 0.98,
+		Text:                "Hello world",
+		Words: []TranscriptWord{
+			{Text: "Hello", Type: "word"},
+			{Text: "world", Type: "word"},
+		},
+		TranscriptionID: "tx_single",
+	}
+
+	chunks := transcript.Chunks()
+	if len(chunks) != 1 {
+		t.Fatalf("Chunks length = %d, want 1", len(chunks))
+	}
+	if chunks[0].Text != transcript.Text {
+		t.Fatalf("Chunks[0].Text = %q, want %q", chunks[0].Text, transcript.Text)
+	}
+	if chunks[0].TranscriptionID != transcript.TranscriptionID {
+		t.Fatalf("Chunks[0].TranscriptionID = %q, want %q", chunks[0].TranscriptionID, transcript.TranscriptionID)
+	}
+	if len(chunks[0].Words) != 2 {
+		t.Fatalf("Chunks[0].Words length = %d, want 2", len(chunks[0].Words))
+	}
+}
+
+func TestTranscriptChunksReturnsMultichannelTranscripts(t *testing.T) {
+	channelZero := 0
+	channelOne := 1
+	transcript := Transcript{
+		TranscriptionID: "tx_multi",
+		Transcripts: []Transcript{
+			{
+				Text:         "Channel zero",
+				ChannelIndex: &channelZero,
+			},
+			{
+				Text:         "Channel one",
+				ChannelIndex: &channelOne,
+			},
+		},
+	}
+
+	chunks := transcript.Chunks()
+	if len(chunks) != 2 {
+		t.Fatalf("Chunks length = %d, want 2", len(chunks))
+	}
+	if chunks[0].Text != "Channel zero" {
+		t.Fatalf("Chunks[0].Text = %q, want Channel zero", chunks[0].Text)
+	}
+	if chunks[1].ChannelIndex == nil || *chunks[1].ChannelIndex != channelOne {
+		t.Fatalf("Chunks[1].ChannelIndex = %v, want %d", chunks[1].ChannelIndex, channelOne)
+	}
+}
+
 func TestSubmitTranscriptWebhookReturnsAcceptance(t *testing.T) {
 	ctx := context.Background()
 
