@@ -18,10 +18,11 @@ const (
 
 // Client is an ElevenLabs API client.
 type Client struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
-	userAgent  string
+	apiKey      string
+	baseURL     string
+	httpClient  *http.Client
+	userAgent   string
+	retryConfig retryConfig
 }
 
 // ClientOption configures a Client.
@@ -30,10 +31,11 @@ type ClientOption func(*Client)
 // NewClient creates a Client that authenticates with apiKey.
 func NewClient(apiKey string, opts ...ClientOption) *Client {
 	c := &Client{
-		apiKey:     apiKey,
-		baseURL:    defaultBaseURL,
-		httpClient: http.DefaultClient,
-		userAgent:  defaultUserAgent,
+		apiKey:      apiKey,
+		baseURL:     defaultBaseURL,
+		httpClient:  http.DefaultClient,
+		userAgent:   defaultUserAgent,
+		retryConfig: defaultRetryConfig(),
 	}
 
 	for _, opt := range opts {
@@ -104,23 +106,84 @@ func (c *Client) endpoint(path string) (string, error) {
 	return base.ResolveReference(relative).String(), nil
 }
 
-func (c *Client) do(req *http.Request, out any) error {
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
+type requestBuilder func(context.Context) (*http.Request, error)
+
+func (c *Client) do(ctx context.Context, build requestBuilder, retryable bool, out any) error {
+	if c == nil {
+		return errors.New("elevenlabs: nil client")
 	}
+
+	cfg := c.retryConfig
+	if cfg.maxAttempts == 0 {
+		cfg = defaultRetryConfig()
+	}
+
+	maxAttempts := 1
+	if retryable {
+		maxAttempts = cfg.maxAttempts
+	}
+
+	httpClient := c.httpClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		req, err := build(ctx)
+		if err != nil {
+			return err
+		}
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
+			if attempt == maxAttempts {
+				return err
+			}
+			if err := waitForRetry(ctx, cfg.backoffDelay(attempt)); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return decodeResponse(resp, out)
+		}
+
+		retryAfter := resp.Header.Get("Retry-After")
+		apiErr, readErr := readAPIError(resp)
+		if readErr != nil {
+			if attempt < maxAttempts && cfg.retryableStatus(resp.StatusCode) {
+				if err := waitForRetry(ctx, cfg.retryDelay(attempt, retryAfter)); err != nil {
+					return err
+				}
+				continue
+			}
+			return readErr
+		}
+
+		if attempt == maxAttempts || !cfg.retryableStatus(apiErr.StatusCode) {
+			return apiErr
+		}
+		if err := waitForRetry(ctx, cfg.retryDelay(attempt, retryAfter)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func decodeResponse(resp *http.Response, out any) error {
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			return fmt.Errorf("elevenlabs: read error response: %w", readErr)
-		}
-		return newAPIError(resp.StatusCode, resp.Status, body)
-	}
-
 	if out == nil {
-		_, err = io.Copy(io.Discard, resp.Body)
+		_, err := io.Copy(io.Discard, resp.Body)
 		return err
 	}
 
@@ -129,4 +192,15 @@ func (c *Client) do(req *http.Request, out any) error {
 	}
 
 	return nil
+}
+
+func readAPIError(resp *http.Response) (*APIError, error) {
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("elevenlabs: read error response: %w", err)
+	}
+
+	return newAPIError(resp.StatusCode, resp.Status, body), nil
 }

@@ -1,6 +1,7 @@
 package elevenlabs
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -61,15 +62,27 @@ func (c *Client) CreateTranscript(ctx context.Context, in CreateTranscriptReques
 		return nil, err
 	}
 
-	body, contentType := createTranscriptBody(in)
-	req, err := c.newRequest(ctx, http.MethodPost, "/v1/speech-to-text", body)
-	if err != nil {
-		return nil, err
+	body := createTranscriptBody(in)
+	build := func(ctx context.Context) (*http.Request, error) {
+		reader, err := body.newReader()
+		if err != nil {
+			return nil, err
+		}
+
+		req, err := c.newRequest(ctx, http.MethodPost, "/v1/speech-to-text", reader)
+		if err != nil {
+			if closer, ok := reader.(io.Closer); ok {
+				_ = closer.Close()
+			}
+			return nil, err
+		}
+		req.Header.Set("Content-Type", body.contentType)
+
+		return req, nil
 	}
-	req.Header.Set("Content-Type", contentType)
 
 	var out Transcript
-	if err := c.do(req, &out); err != nil {
+	if err := c.do(ctx, build, body.retryable, &out); err != nil {
 		return nil, err
 	}
 
@@ -83,13 +96,12 @@ func (c *Client) GetTranscript(ctx context.Context, id string) (*Transcript, err
 		return nil, errors.New("elevenlabs: transcript id is required")
 	}
 
-	req, err := c.newRequest(ctx, http.MethodGet, transcriptPath(id), nil)
-	if err != nil {
-		return nil, err
+	build := func(ctx context.Context) (*http.Request, error) {
+		return c.newRequest(ctx, http.MethodGet, transcriptPath(id), nil)
 	}
 
 	var out Transcript
-	if err := c.do(req, &out); err != nil {
+	if err := c.do(ctx, build, true, &out); err != nil {
 		return nil, err
 	}
 
@@ -103,12 +115,11 @@ func (c *Client) DeleteTranscript(ctx context.Context, id string) error {
 		return errors.New("elevenlabs: transcript id is required")
 	}
 
-	req, err := c.newRequest(ctx, http.MethodDelete, transcriptPath(id), nil)
-	if err != nil {
-		return err
+	build := func(ctx context.Context) (*http.Request, error) {
+		return c.newRequest(ctx, http.MethodDelete, transcriptPath(id), nil)
 	}
 
-	return c.do(req, nil)
+	return c.do(ctx, build, true, nil)
 }
 
 func transcriptPath(id string) string {
@@ -147,9 +158,79 @@ func validateCreateTranscriptRequest(in CreateTranscriptRequest) error {
 	}
 }
 
-func createTranscriptBody(in CreateTranscriptRequest) (io.Reader, string) {
+type transcriptBody struct {
+	newReader   func() (io.Reader, error)
+	contentType string
+	retryable   bool
+}
+
+func createTranscriptBody(in CreateTranscriptRequest) transcriptBody {
+	writer := multipart.NewWriter(io.Discard)
+	boundary := writer.Boundary()
+	contentType := writer.FormDataContentType()
+
+	if in.File == nil {
+		return transcriptBody{
+			newReader: func() (io.Reader, error) {
+				return createTranscriptBufferedBody(in, boundary)
+			},
+			contentType: contentType,
+			retryable:   true,
+		}
+	}
+
+	if seeker, ok := in.File.Reader.(io.ReadSeeker); ok {
+		return transcriptBody{
+			newReader: func() (io.Reader, error) {
+				if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+					return nil, fmt.Errorf("seek file: %w", err)
+				}
+				return createTranscriptStreamingBody(in, boundary)
+			},
+			contentType: contentType,
+			retryable:   true,
+		}
+	}
+
+	used := false
+	return transcriptBody{
+		newReader: func() (io.Reader, error) {
+			if used {
+				return nil, errors.New("elevenlabs: transcript file reader is not replayable")
+			}
+			used = true
+			return createTranscriptStreamingBody(in, boundary)
+		},
+		contentType: contentType,
+		retryable:   false,
+	}
+}
+
+func createTranscriptBufferedBody(in CreateTranscriptRequest, boundary string) (io.Reader, error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if err := mw.SetBoundary(boundary); err != nil {
+		return nil, err
+	}
+	if err := writeCreateTranscriptForm(mw, in); err != nil {
+		_ = mw.Close()
+		return nil, err
+	}
+	if err := mw.Close(); err != nil {
+		return nil, err
+	}
+
+	return bytes.NewReader(buf.Bytes()), nil
+}
+
+func createTranscriptStreamingBody(in CreateTranscriptRequest, boundary string) (io.Reader, error) {
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
+	if err := mw.SetBoundary(boundary); err != nil {
+		_ = pr.Close()
+		_ = pw.CloseWithError(err)
+		return nil, err
+	}
 
 	go func() {
 		err := writeCreateTranscriptForm(mw, in)
@@ -165,7 +246,7 @@ func createTranscriptBody(in CreateTranscriptRequest) (io.Reader, string) {
 		_ = pw.Close()
 	}()
 
-	return pr, mw.FormDataContentType()
+	return pr, nil
 }
 
 func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest) error {
