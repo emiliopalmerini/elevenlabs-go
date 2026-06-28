@@ -129,21 +129,45 @@ type TranscriptWebhookResponse struct {
 
 // CreateTranscript transcribes an audio or video file.
 func (c *Client) CreateTranscript(ctx context.Context, in CreateTranscriptRequest) (*Transcript, error) {
+	resp, err := c.CreateTranscriptWithResponse(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// CreateTranscriptWithResponse transcribes an audio or video file and returns
+// HTTP response metadata.
+func (c *Client) CreateTranscriptWithResponse(ctx context.Context, in CreateTranscriptRequest) (*Response[*Transcript], error) {
 	if err := validateCreateTranscriptRequest(in); err != nil {
 		return nil, err
 	}
 
 	var out Transcript
-	if err := c.doCreateTranscript(ctx, in, &out); err != nil {
+	raw, err := c.doCreateTranscript(ctx, in, &out)
+	if err != nil {
 		return nil, err
 	}
 
-	return &out, nil
+	return &Response[*Transcript]{
+		Data:        &out,
+		RawResponse: raw,
+	}, nil
 }
 
 // SubmitTranscriptWebhook submits a transcript request for asynchronous webhook
 // processing.
 func (c *Client) SubmitTranscriptWebhook(ctx context.Context, in CreateTranscriptRequest) (*TranscriptWebhookResponse, error) {
+	resp, err := c.SubmitTranscriptWebhookWithResponse(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// SubmitTranscriptWebhookWithResponse submits a transcript request for
+// asynchronous webhook processing and returns HTTP response metadata.
+func (c *Client) SubmitTranscriptWebhookWithResponse(ctx context.Context, in CreateTranscriptRequest) (*Response[*TranscriptWebhookResponse], error) {
 	webhook := true
 	in.Webhook = &webhook
 
@@ -152,14 +176,18 @@ func (c *Client) SubmitTranscriptWebhook(ctx context.Context, in CreateTranscrip
 	}
 
 	var out TranscriptWebhookResponse
-	if err := c.doCreateTranscript(ctx, in, &out); err != nil {
+	raw, err := c.doCreateTranscript(ctx, in, &out)
+	if err != nil {
 		return nil, err
 	}
 
-	return &out, nil
+	return &Response[*TranscriptWebhookResponse]{
+		Data:        &out,
+		RawResponse: raw,
+	}, nil
 }
 
-func (c *Client) doCreateTranscript(ctx context.Context, in CreateTranscriptRequest, out any) error {
+func (c *Client) doCreateTranscript(ctx context.Context, in CreateTranscriptRequest, out any) (RawResponse, error) {
 	body := createTranscriptBody(in)
 	build := func(ctx context.Context) (*http.Request, error) {
 		reader, err := body.newReader()
@@ -179,11 +207,28 @@ func (c *Client) doCreateTranscript(ctx context.Context, in CreateTranscriptRequ
 		return req, nil
 	}
 
-	return c.do(ctx, build, body.retryable, out)
+	respBody, raw, err := c.do(ctx, build, body.retryable)
+	if err != nil {
+		return raw, err
+	}
+	if err := decodeResponse(respBody, out); err != nil {
+		return raw, err
+	}
+	return raw, nil
 }
 
 // GetTranscript retrieves a previously generated transcript by ID.
 func (c *Client) GetTranscript(ctx context.Context, id string) (*Transcript, error) {
+	resp, err := c.GetTranscriptWithResponse(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetTranscriptWithResponse retrieves a previously generated transcript by ID
+// and returns HTTP response metadata.
+func (c *Client) GetTranscriptWithResponse(ctx context.Context, id string) (*Response[*Transcript], error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, errors.New("elevenlabs: transcript id is required")
@@ -194,11 +239,18 @@ func (c *Client) GetTranscript(ctx context.Context, id string) (*Transcript, err
 	}
 
 	var out Transcript
-	if err := c.do(ctx, build, true, &out); err != nil {
+	body, raw, err := c.do(ctx, build, true)
+	if err != nil {
+		return nil, err
+	}
+	if err := decodeResponse(body, &out); err != nil {
 		return nil, err
 	}
 
-	return &out, nil
+	return &Response[*Transcript]{
+		Data:        &out,
+		RawResponse: raw,
+	}, nil
 }
 
 // DeleteTranscript deletes a previously generated transcript by ID.
@@ -212,7 +264,35 @@ func (c *Client) DeleteTranscript(ctx context.Context, id string) error {
 		return c.newRequest(ctx, http.MethodDelete, transcriptPath(id), nil)
 	}
 
-	return c.do(ctx, build, true, nil)
+	_, _, err := c.do(ctx, build, true)
+	return err
+}
+
+// DeleteTranscriptWithResponse deletes a previously generated transcript by ID
+// and returns HTTP response metadata.
+func (c *Client) DeleteTranscriptWithResponse(ctx context.Context, id string) (*Response[any], error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, errors.New("elevenlabs: transcript id is required")
+	}
+
+	build := func(ctx context.Context) (*http.Request, error) {
+		return c.newRequest(ctx, http.MethodDelete, transcriptPath(id), nil)
+	}
+
+	body, raw, err := c.do(ctx, build, true)
+	if err != nil {
+		return nil, err
+	}
+	data, err := decodeOptionalResponse(body)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Response[any]{
+		Data:        data,
+		RawResponse: raw,
+	}, nil
 }
 
 func transcriptPath(id string) string {

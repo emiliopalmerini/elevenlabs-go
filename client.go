@@ -1,6 +1,7 @@
 package elevenlabs
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -108,9 +109,9 @@ func (c *Client) endpoint(path string) (string, error) {
 
 type requestBuilder func(context.Context) (*http.Request, error)
 
-func (c *Client) do(ctx context.Context, build requestBuilder, retryable bool, out any) error {
+func (c *Client) do(ctx context.Context, build requestBuilder, retryable bool) ([]byte, RawResponse, error) {
 	if c == nil {
-		return errors.New("elevenlabs: nil client")
+		return nil, RawResponse{}, errors.New("elevenlabs: nil client")
 	}
 
 	cfg := c.retryConfig
@@ -130,77 +131,98 @@ func (c *Client) do(ctx context.Context, build requestBuilder, retryable bool, o
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
-			return err
+			return nil, RawResponse{}, err
 		}
 
 		req, err := build(ctx)
 		if err != nil {
-			return err
+			return nil, RawResponse{}, err
 		}
 
 		resp, err := httpClient.Do(req)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
-				return ctxErr
+				return nil, RawResponse{}, ctxErr
 			}
 			if attempt == maxAttempts {
-				return err
+				return nil, RawResponse{}, err
 			}
 			if err := waitForRetry(ctx, cfg.backoffDelay(attempt)); err != nil {
-				return err
+				return nil, RawResponse{}, err
 			}
 			continue
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			return decodeResponse(resp, out)
+			body, raw, err := readResponse(resp)
+			return body, raw, err
 		}
 
 		retryAfter := resp.Header.Get("Retry-After")
-		apiErr, readErr := readAPIError(resp)
+		apiErr, raw, readErr := readAPIError(resp)
 		if readErr != nil {
 			if attempt < maxAttempts && cfg.retryableStatus(resp.StatusCode) {
 				if err := waitForRetry(ctx, cfg.retryDelay(attempt, retryAfter)); err != nil {
-					return err
+					return nil, raw, err
 				}
 				continue
 			}
-			return readErr
+			return nil, raw, readErr
 		}
 
 		if attempt == maxAttempts || !cfg.retryableStatus(apiErr.StatusCode) {
-			return apiErr
+			return nil, raw, apiErr
 		}
 		if err := waitForRetry(ctx, cfg.retryDelay(attempt, retryAfter)); err != nil {
-			return err
+			return nil, raw, err
 		}
 	}
 
-	return nil
+	return nil, RawResponse{}, nil
 }
 
-func decodeResponse(resp *http.Response, out any) error {
+func readResponse(resp *http.Response) ([]byte, RawResponse, error) {
 	defer resp.Body.Close()
 
+	raw := newRawResponse(resp)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, raw, fmt.Errorf("elevenlabs: read response: %w", err)
+	}
+	return body, raw, nil
+}
+
+func decodeResponse(body []byte, out any) error {
 	if out == nil {
-		_, err := io.Copy(io.Discard, resp.Body)
-		return err
+		return nil
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(out); err != nil {
 		return fmt.Errorf("elevenlabs: decode response: %w", err)
 	}
 
 	return nil
 }
 
-func readAPIError(resp *http.Response) (*APIError, error) {
+func decodeOptionalResponse(body []byte) (any, error) {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil, nil
+	}
+	var out any
+	if err := decodeResponse(body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func readAPIError(resp *http.Response) (*APIError, RawResponse, error) {
 	defer resp.Body.Close()
 
+	raw := newRawResponse(resp)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("elevenlabs: read error response: %w", err)
+		return nil, raw, fmt.Errorf("elevenlabs: read error response: %w", err)
 	}
 
-	return newAPIError(resp.StatusCode, resp.Status, body), nil
+	return newAPIError(resp.StatusCode, resp.Status, body), raw, nil
 }

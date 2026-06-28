@@ -136,6 +136,45 @@ func TestCreateTranscriptUploadsFile(t *testing.T) {
 	}
 }
 
+func TestCreateTranscriptWithResponseReturnsRawMetadata(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = readMultipartForm(t, r)
+
+		w.Header().Set("X-Request-ID", "req_123")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"text":"hello with metadata"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.CreateTranscriptWithResponse(ctx, CreateTranscriptRequest{
+		ModelID:   "scribe_v1",
+		SourceURL: "https://example.com/audio.mp3",
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscriptWithResponse returned error: %v", err)
+	}
+	if resp.Data == nil || resp.Data.Text != "hello with metadata" {
+		t.Fatalf("Data = %#v, want transcript text", resp.Data)
+	}
+	if resp.RawResponse.StatusCode != http.StatusCreated {
+		t.Fatalf("StatusCode = %d, want %d", resp.RawResponse.StatusCode, http.StatusCreated)
+	}
+	if resp.RawResponse.Status != "201 Created" {
+		t.Fatalf("Status = %q, want 201 Created", resp.RawResponse.Status)
+	}
+	if resp.RawResponse.Header.Get("X-Request-ID") != "req_123" {
+		t.Fatalf("X-Request-ID = %q, want req_123", resp.RawResponse.Header.Get("X-Request-ID"))
+	}
+	if !strings.HasSuffix(resp.RawResponse.URL, "/v1/speech-to-text") {
+		t.Fatalf("URL = %q, want speech-to-text endpoint", resp.RawResponse.URL)
+	}
+}
+
 func TestCreateTranscriptAcceptsSourceURL(t *testing.T) {
 	ctx := context.Background()
 
@@ -333,6 +372,43 @@ func TestSubmitTranscriptWebhookReturnsAcceptance(t *testing.T) {
 	}
 	if response.TranscriptionID == nil || *response.TranscriptionID != "tx_123" {
 		t.Fatalf("TranscriptionID = %v, want tx_123", response.TranscriptionID)
+	}
+}
+
+func TestSubmitTranscriptWebhookWithResponseReturnsRawMetadata(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form := readMultipartForm(t, r)
+		assertFormValue(t, form.Value, "webhook", "true")
+
+		w.Header().Set("X-Request-ID", "req_webhook")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"message": "accepted",
+			"request_id": "req_webhook",
+			"transcription_id": "tx_webhook"
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.SubmitTranscriptWebhookWithResponse(ctx, CreateTranscriptRequest{
+		ModelID:   "scribe_v2",
+		SourceURL: "https://example.com/audio.mp3",
+	})
+	if err != nil {
+		t.Fatalf("SubmitTranscriptWebhookWithResponse returned error: %v", err)
+	}
+	if resp.Data == nil || resp.Data.RequestID != "req_webhook" {
+		t.Fatalf("Data = %#v, want webhook request ID", resp.Data)
+	}
+	if resp.RawResponse.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want %d", resp.RawResponse.StatusCode, http.StatusOK)
+	}
+	if resp.RawResponse.Header.Get("X-Request-ID") != "req_webhook" {
+		t.Fatalf("X-Request-ID = %q, want req_webhook", resp.RawResponse.Header.Get("X-Request-ID"))
 	}
 }
 
@@ -594,6 +670,39 @@ func TestGetTranscript(t *testing.T) {
 	}
 }
 
+func TestGetTranscriptWithResponseReturnsRawMetadata(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RequestURI() != "/v1/speech-to-text/transcripts/tx_123" {
+			t.Fatalf("request uri = %s, want transcript endpoint", r.URL.RequestURI())
+		}
+		w.Header().Set("X-Request-ID", "req_get")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"text":"stored transcript","language_code":"en"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.GetTranscriptWithResponse(ctx, "tx_123")
+	if err != nil {
+		t.Fatalf("GetTranscriptWithResponse returned error: %v", err)
+	}
+	if resp.Data == nil || resp.Data.Text != "stored transcript" {
+		t.Fatalf("Data = %#v, want stored transcript", resp.Data)
+	}
+	if resp.RawResponse.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want %d", resp.RawResponse.StatusCode, http.StatusOK)
+	}
+	if resp.RawResponse.Header.Get("X-Request-ID") != "req_get" {
+		t.Fatalf("X-Request-ID = %q, want req_get", resp.RawResponse.Header.Get("X-Request-ID"))
+	}
+	if !strings.HasSuffix(resp.RawResponse.URL, "/v1/speech-to-text/transcripts/tx_123") {
+		t.Fatalf("URL = %q, want transcript endpoint", resp.RawResponse.URL)
+	}
+}
+
 func TestGetTranscriptEscapesID(t *testing.T) {
 	ctx := context.Background()
 
@@ -642,6 +751,74 @@ func TestDeleteTranscript(t *testing.T) {
 
 	if err := client.DeleteTranscript(ctx, "tx_123"); err != nil {
 		t.Fatalf("DeleteTranscript returned error: %v", err)
+	}
+}
+
+func TestDeleteTranscriptIgnoresSuccessBody(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`not-json`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	if err := client.DeleteTranscript(ctx, "tx_123"); err != nil {
+		t.Fatalf("DeleteTranscript returned error: %v", err)
+	}
+}
+
+func TestDeleteTranscriptWithResponseAllowsEmptyBody(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-ID", "req_delete_empty")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.DeleteTranscriptWithResponse(ctx, "tx_123")
+	if err != nil {
+		t.Fatalf("DeleteTranscriptWithResponse returned error: %v", err)
+	}
+	if resp.Data != nil {
+		t.Fatalf("Data = %#v, want nil", resp.Data)
+	}
+	if resp.RawResponse.StatusCode != http.StatusNoContent {
+		t.Fatalf("StatusCode = %d, want %d", resp.RawResponse.StatusCode, http.StatusNoContent)
+	}
+	if resp.RawResponse.Header.Get("X-Request-ID") != "req_delete_empty" {
+		t.Fatalf("X-Request-ID = %q, want req_delete_empty", resp.RawResponse.Header.Get("X-Request-ID"))
+	}
+}
+
+func TestDeleteTranscriptWithResponseParsesJSONBody(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"deleted":true}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.DeleteTranscriptWithResponse(ctx, "tx_123")
+	if err != nil {
+		t.Fatalf("DeleteTranscriptWithResponse returned error: %v", err)
+	}
+	body, ok := resp.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("Data type = %T, want map[string]any", resp.Data)
+	}
+	if body["deleted"] != true {
+		t.Fatalf("deleted = %#v, want true", body["deleted"])
+	}
+	if resp.RawResponse.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want %d", resp.RawResponse.StatusCode, http.StatusOK)
 	}
 }
 
