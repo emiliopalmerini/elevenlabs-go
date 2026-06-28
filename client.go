@@ -239,5 +239,5 @@ func readAPIError(resp *http.Response) (*APIError, RawResponse, error) {
 		return nil, raw, fmt.Errorf("elevenlabs: read error response: %w", err)
 	}
 
-	return newAPIError(resp.StatusCode, resp.Status, body), raw, nil
+	return newAPIError(resp.StatusCode, resp.Status, body, raw), raw, nil
 }
