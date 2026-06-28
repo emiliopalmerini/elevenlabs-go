@@ -176,6 +176,166 @@ func TestCreateTranscriptAcceptsSourceURL(t *testing.T) {
 	}
 }
 
+func TestCreateTranscriptParsesDocumentedResponseFields(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = readMultipartForm(t, r)
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"language_code": "en",
+			"language_probability": 0.98,
+			"text": "Hello!",
+			"transcription_id": "tx_123",
+			"audio_duration_secs": 1.25,
+			"entities": [
+				{"text":"Emilio","entity_type":"person_name","start_char":0,"end_char":6}
+			],
+			"words": [
+				{
+					"text": "Hello",
+					"start": 0,
+					"end": 0.5,
+					"type": "word",
+					"speaker_id": "speaker_1",
+					"logprob": -0.124,
+					"channel_index": 1,
+					"characters": [
+						{"text":"H","start":0,"end":0.1}
+					]
+				},
+				{"text":"!","start":null,"end":null,"type":"spacing","logprob":-0.2}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+		ModelID:   "scribe_v2",
+		SourceURL: "https://example.com/audio.mp3",
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscript returned error: %v", err)
+	}
+	if transcript.TranscriptionID != "tx_123" {
+		t.Fatalf("TranscriptionID = %q, want tx_123", transcript.TranscriptionID)
+	}
+	if transcript.AudioDurationSecs == nil || *transcript.AudioDurationSecs != 1.25 {
+		t.Fatalf("AudioDurationSecs = %v, want 1.25", transcript.AudioDurationSecs)
+	}
+	if len(transcript.Entities) != 1 || transcript.Entities[0].EntityType != "person_name" {
+		t.Fatalf("Entities = %#v, want detected person_name entity", transcript.Entities)
+	}
+	word := transcript.Words[0]
+	if word.Start == nil || *word.Start != 0 {
+		t.Fatalf("Words[0].Start = %v, want 0", word.Start)
+	}
+	if word.End == nil || *word.End != 0.5 {
+		t.Fatalf("Words[0].End = %v, want 0.5", word.End)
+	}
+	if word.Logprob != -0.124 {
+		t.Fatalf("Words[0].Logprob = %f, want -0.124", word.Logprob)
+	}
+	if word.ChannelIndex == nil || *word.ChannelIndex != 1 {
+		t.Fatalf("Words[0].ChannelIndex = %v, want 1", word.ChannelIndex)
+	}
+	if len(word.Characters) != 1 || word.Characters[0].Text != "H" {
+		t.Fatalf("Words[0].Characters = %#v, want H character timing", word.Characters)
+	}
+	if transcript.Words[1].Start != nil || transcript.Words[1].End != nil {
+		t.Fatalf("Words[1] times = %v/%v, want nil", transcript.Words[1].Start, transcript.Words[1].End)
+	}
+}
+
+func TestCreateTranscriptParsesMultichannelResponse(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = readMultipartForm(t, r)
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"transcription_id": "tx_multi",
+			"audio_duration_secs": 12.5,
+			"transcripts": [
+				{
+					"language_code": "en",
+					"language_probability": 0.99,
+					"text": "Channel zero",
+					"channel_index": 0,
+					"words": [{"text":"Channel","type":"word","logprob":-0.1,"channel_index":0}]
+				},
+				{
+					"language_code": "en",
+					"language_probability": 0.97,
+					"text": "Channel one",
+					"channel_index": 1,
+					"words": [{"text":"Channel","type":"word","logprob":-0.2,"channel_index":1}]
+				}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+		ModelID:         "scribe_v2",
+		SourceURL:       "https://example.com/audio.mp3",
+		UseMultiChannel: boolPtr(true),
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscript returned error: %v", err)
+	}
+	if len(transcript.Transcripts) != 2 {
+		t.Fatalf("Transcripts length = %d, want 2", len(transcript.Transcripts))
+	}
+	if transcript.Transcripts[1].ChannelIndex == nil || *transcript.Transcripts[1].ChannelIndex != 1 {
+		t.Fatalf("Transcripts[1].ChannelIndex = %v, want 1", transcript.Transcripts[1].ChannelIndex)
+	}
+	if transcript.Transcripts[1].Words[0].ChannelIndex == nil || *transcript.Transcripts[1].Words[0].ChannelIndex != 1 {
+		t.Fatalf("Transcripts[1].Words[0].ChannelIndex = %v, want 1", transcript.Transcripts[1].Words[0].ChannelIndex)
+	}
+}
+
+func TestSubmitTranscriptWebhookReturnsAcceptance(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form := readMultipartForm(t, r)
+		assertFormValue(t, form.Value, "webhook", "true")
+		assertFormValue(t, form.Value, "webhook_id", "wh_123")
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"message": "Request accepted. Transcription result will be sent to the webhook.",
+			"request_id": "req_123",
+			"transcription_id": "tx_123"
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	response, err := client.SubmitTranscriptWebhook(ctx, CreateTranscriptRequest{
+		ModelID:   "scribe_v2",
+		SourceURL: "https://example.com/audio.mp3",
+		WebhookID: "wh_123",
+	})
+	if err != nil {
+		t.Fatalf("SubmitTranscriptWebhook returned error: %v", err)
+	}
+	if response.RequestID != "req_123" {
+		t.Fatalf("RequestID = %q, want req_123", response.RequestID)
+	}
+	if response.TranscriptionID == nil || *response.TranscriptionID != "tx_123" {
+		t.Fatalf("TranscriptionID = %v, want tx_123", response.TranscriptionID)
+	}
+}
+
 func TestCreateTranscriptSendsAdvancedRequestFields(t *testing.T) {
 	ctx := context.Background()
 	tagAudioEvents := false
@@ -386,6 +546,10 @@ func TestDeleteTranscriptReturnsAPIError(t *testing.T) {
 	if !strings.Contains(string(apiErr.Body), "rate limited") {
 		t.Fatalf("Body = %q, want to contain rate limited", string(apiErr.Body))
 	}
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 func assertFormValue(t *testing.T, values map[string][]string, key, want string) {

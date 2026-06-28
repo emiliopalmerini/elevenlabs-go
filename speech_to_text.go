@@ -47,19 +47,50 @@ type CreateTranscriptRequest struct {
 
 // Transcript is a speech-to-text transcript response.
 type Transcript struct {
-	Text                string           `json:"text"`
+	Text                string           `json:"text,omitempty"`
 	LanguageCode        string           `json:"language_code,omitempty"`
 	LanguageProbability float64          `json:"language_probability,omitempty"`
 	Words               []TranscriptWord `json:"words,omitempty"`
+	ChannelIndex        *int             `json:"channel_index,omitempty"`
+	TranscriptionID     string           `json:"transcription_id,omitempty"`
+	AudioDurationSecs   *float64         `json:"audio_duration_secs,omitempty"`
+	Entities            []DetectedEntity `json:"entities,omitempty"`
+	Transcripts         []Transcript     `json:"transcripts,omitempty"`
 }
 
 // TranscriptWord is a word-level transcript segment.
 type TranscriptWord struct {
-	Text      string  `json:"text"`
-	Type      string  `json:"type,omitempty"`
-	Start     float64 `json:"start,omitempty"`
-	End       float64 `json:"end,omitempty"`
-	SpeakerID string  `json:"speaker_id,omitempty"`
+	Text         string                `json:"text"`
+	Type         string                `json:"type,omitempty"`
+	Start        *float64              `json:"start,omitempty"`
+	End          *float64              `json:"end,omitempty"`
+	SpeakerID    string                `json:"speaker_id,omitempty"`
+	Logprob      float64               `json:"logprob,omitempty"`
+	Characters   []TranscriptCharacter `json:"characters,omitempty"`
+	ChannelIndex *int                  `json:"channel_index,omitempty"`
+}
+
+// TranscriptCharacter is a character-level transcript segment.
+type TranscriptCharacter struct {
+	Text  string   `json:"text"`
+	Start *float64 `json:"start,omitempty"`
+	End   *float64 `json:"end,omitempty"`
+}
+
+// DetectedEntity is an entity detected in a transcript.
+type DetectedEntity struct {
+	Text       string `json:"text"`
+	EntityType string `json:"entity_type"`
+	StartChar  int    `json:"start_char"`
+	EndChar    int    `json:"end_char"`
+}
+
+// TranscriptWebhookResponse is returned when a transcript is submitted for
+// asynchronous webhook processing.
+type TranscriptWebhookResponse struct {
+	Message         string  `json:"message"`
+	RequestID       string  `json:"request_id"`
+	TranscriptionID *string `json:"transcription_id,omitempty"`
 }
 
 // CreateTranscript transcribes an audio or video file.
@@ -68,6 +99,33 @@ func (c *Client) CreateTranscript(ctx context.Context, in CreateTranscriptReques
 		return nil, err
 	}
 
+	var out Transcript
+	if err := c.doCreateTranscript(ctx, in, &out); err != nil {
+		return nil, err
+	}
+
+	return &out, nil
+}
+
+// SubmitTranscriptWebhook submits a transcript request for asynchronous webhook
+// processing.
+func (c *Client) SubmitTranscriptWebhook(ctx context.Context, in CreateTranscriptRequest) (*TranscriptWebhookResponse, error) {
+	webhook := true
+	in.Webhook = &webhook
+
+	if err := validateCreateTranscriptRequest(in); err != nil {
+		return nil, err
+	}
+
+	var out TranscriptWebhookResponse
+	if err := c.doCreateTranscript(ctx, in, &out); err != nil {
+		return nil, err
+	}
+
+	return &out, nil
+}
+
+func (c *Client) doCreateTranscript(ctx context.Context, in CreateTranscriptRequest, out any) error {
 	body := createTranscriptBody(in)
 	build := func(ctx context.Context) (*http.Request, error) {
 		reader, err := body.newReader()
@@ -87,12 +145,7 @@ func (c *Client) CreateTranscript(ctx context.Context, in CreateTranscriptReques
 		return req, nil
 	}
 
-	var out Transcript
-	if err := c.do(ctx, build, body.retryable, &out); err != nil {
-		return nil, err
-	}
-
-	return &out, nil
+	return c.do(ctx, build, body.retryable, out)
 }
 
 // GetTranscript retrieves a previously generated transcript by ID.
