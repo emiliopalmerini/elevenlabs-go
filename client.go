@@ -109,6 +109,21 @@ func (c *Client) endpoint(path string) (string, error) {
 
 type requestBuilder func(context.Context) (*http.Request, error)
 
+func (c *Client) getJSON(ctx context.Context, path string, out any) (RawResponse, error) {
+	build := func(ctx context.Context) (*http.Request, error) {
+		return c.newRequest(ctx, http.MethodGet, path, nil)
+	}
+
+	body, raw, err := c.do(ctx, build, true)
+	if err != nil {
+		return raw, err
+	}
+	if err := decodeResponse(body, out); err != nil {
+		return raw, err
+	}
+	return raw, nil
+}
+
 func (c *Client) do(ctx context.Context, build requestBuilder, retryable bool) ([]byte, RawResponse, error) {
 	if c == nil {
 		return nil, RawResponse{}, errors.New("elevenlabs: nil client")

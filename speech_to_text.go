@@ -234,16 +234,9 @@ func (c *Client) GetTranscriptWithResponse(ctx context.Context, id string) (*Res
 		return nil, errors.New("elevenlabs: transcript id is required")
 	}
 
-	build := func(ctx context.Context) (*http.Request, error) {
-		return c.newRequest(ctx, http.MethodGet, transcriptPath(id), nil)
-	}
-
 	var out Transcript
-	body, raw, err := c.do(ctx, build, true)
+	raw, err := c.getJSON(ctx, transcriptPath(id), &out)
 	if err != nil {
-		return nil, err
-	}
-	if err := decodeResponse(body, &out); err != nil {
 		return nil, err
 	}
 

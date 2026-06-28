@@ -2,7 +2,6 @@ package elevenlabs
 
 import (
 	"context"
-	"net/http"
 )
 
 // User contains account metadata returned by the ElevenLabs user endpoint.
@@ -68,16 +67,9 @@ func (c *Client) GetUser(ctx context.Context) (*User, error) {
 // GetUserWithResponse gets information about the authenticated user and returns
 // HTTP response metadata.
 func (c *Client) GetUserWithResponse(ctx context.Context) (*Response[*User], error) {
-	build := func(ctx context.Context) (*http.Request, error) {
-		return c.newRequest(ctx, http.MethodGet, "/v1/user", nil)
-	}
-
 	var out User
-	body, raw, err := c.do(ctx, build, true)
+	raw, err := c.getJSON(ctx, "/v1/user", &out)
 	if err != nil {
-		return nil, err
-	}
-	if err := decodeResponse(body, &out); err != nil {
 		return nil, err
 	}
 
