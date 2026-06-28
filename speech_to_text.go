@@ -96,6 +96,21 @@ func (c *Client) GetTranscript(ctx context.Context, id string) (*Transcript, err
 	return &out, nil
 }
 
+// DeleteTranscript deletes a previously generated transcript by ID.
+func (c *Client) DeleteTranscript(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return errors.New("elevenlabs: transcript id is required")
+	}
+
+	req, err := c.newRequest(ctx, http.MethodDelete, transcriptPath(id), nil)
+	if err != nil {
+		return err
+	}
+
+	return c.do(req, nil)
+}
+
 func transcriptPath(id string) string {
 	return "/v1/speech-to-text/transcripts/" + url.PathEscape(id)
 }

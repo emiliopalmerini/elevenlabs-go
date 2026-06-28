@@ -3,6 +3,7 @@ package elevenlabs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -249,6 +250,87 @@ func TestGetTranscriptValidatesID(t *testing.T) {
 
 	if _, err := client.GetTranscript(context.Background(), " "); err == nil {
 		t.Fatal("GetTranscript error = nil, want missing ID error")
+	}
+}
+
+func TestDeleteTranscript(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %s, want %s", r.Method, http.MethodDelete)
+		}
+		if r.URL.RequestURI() != "/v1/speech-to-text/transcripts/tx_123" {
+			t.Fatalf("request uri = %s, want /v1/speech-to-text/transcripts/tx_123", r.URL.RequestURI())
+		}
+		if got := r.Header.Get("xi-api-key"); got != "test-key" {
+			t.Fatalf("xi-api-key = %q, want test-key", got)
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	if err := client.DeleteTranscript(ctx, "tx_123"); err != nil {
+		t.Fatalf("DeleteTranscript returned error: %v", err)
+	}
+}
+
+func TestDeleteTranscriptEscapesID(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RequestURI() != "/v1/speech-to-text/transcripts/tx%2F123" {
+			t.Fatalf("request uri = %s, want escaped transcript ID", r.URL.RequestURI())
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	if err := client.DeleteTranscript(ctx, "tx/123"); err != nil {
+		t.Fatalf("DeleteTranscript returned error: %v", err)
+	}
+}
+
+func TestDeleteTranscriptValidatesID(t *testing.T) {
+	client := NewClient("test-key")
+
+	if err := client.DeleteTranscript(context.Background(), " "); err == nil {
+		t.Fatal("DeleteTranscript error = nil, want missing ID error")
+	}
+}
+
+func TestDeleteTranscriptReturnsAPIError(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"detail":{"message":"rate limited"}}`, http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	err := client.DeleteTranscript(ctx, "tx_123")
+	if err == nil {
+		t.Fatal("DeleteTranscript error = nil, want API error")
+	}
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error type = %T, want *APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusTooManyRequests)
+	}
+	if apiErr.Message != "rate limited" {
+		t.Fatalf("Message = %q, want rate limited", apiErr.Message)
+	}
+	if !strings.Contains(string(apiErr.Body), "rate limited") {
+		t.Fatalf("Body = %q, want to contain rate limited", string(apiErr.Body))
 	}
 }
 
