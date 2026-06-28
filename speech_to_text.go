@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,6 +74,30 @@ func (c *Client) CreateTranscript(ctx context.Context, in CreateTranscriptReques
 	}
 
 	return &out, nil
+}
+
+// GetTranscript retrieves a previously generated transcript by ID.
+func (c *Client) GetTranscript(ctx context.Context, id string) (*Transcript, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, errors.New("elevenlabs: transcript id is required")
+	}
+
+	req, err := c.newRequest(ctx, http.MethodGet, transcriptPath(id), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var out Transcript
+	if err := c.do(req, &out); err != nil {
+		return nil, err
+	}
+
+	return &out, nil
+}
+
+func transcriptPath(id string) string {
+	return "/v1/speech-to-text/transcripts/" + url.PathEscape(id)
 }
 
 func validateCreateTranscriptRequest(in CreateTranscriptRequest) error {

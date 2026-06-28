@@ -193,6 +193,65 @@ func TestCreateTranscriptValidatesRequiredInput(t *testing.T) {
 	}
 }
 
+func TestGetTranscript(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want %s", r.Method, http.MethodGet)
+		}
+		if r.URL.RequestURI() != "/v1/speech-to-text/transcripts/tx_123" {
+			t.Fatalf("request uri = %s, want /v1/speech-to-text/transcripts/tx_123", r.URL.RequestURI())
+		}
+		if got := r.Header.Get("xi-api-key"); got != "test-key" {
+			t.Fatalf("xi-api-key = %q, want test-key", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"text":"stored transcript","language_code":"en"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	transcript, err := client.GetTranscript(ctx, "tx_123")
+	if err != nil {
+		t.Fatalf("GetTranscript returned error: %v", err)
+	}
+	if transcript.Text != "stored transcript" {
+		t.Fatalf("Text = %q, want stored transcript", transcript.Text)
+	}
+	if transcript.LanguageCode != "en" {
+		t.Fatalf("LanguageCode = %q, want en", transcript.LanguageCode)
+	}
+}
+
+func TestGetTranscriptEscapesID(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RequestURI() != "/v1/speech-to-text/transcripts/tx%2F123" {
+			t.Fatalf("request uri = %s, want escaped transcript ID", r.URL.RequestURI())
+		}
+		_, _ = w.Write([]byte(`{"text":"escaped"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	if _, err := client.GetTranscript(ctx, "tx/123"); err != nil {
+		t.Fatalf("GetTranscript returned error: %v", err)
+	}
+}
+
+func TestGetTranscriptValidatesID(t *testing.T) {
+	client := NewClient("test-key")
+
+	if _, err := client.GetTranscript(context.Background(), " "); err == nil {
+		t.Fatal("GetTranscript error = nil, want missing ID error")
+	}
+}
+
 func assertFormValue(t *testing.T, values map[string][]string, key, want string) {
 	t.Helper()
 
