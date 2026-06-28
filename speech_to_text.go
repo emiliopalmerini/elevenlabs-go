@@ -33,6 +33,7 @@ type CreateTranscriptRequest struct {
 
 	LanguageCode            string
 	TimestampsGranularity   string
+	AdditionalFormats       []TranscriptAdditionalFormatOptions
 	Diarize                 *bool
 	DiarizationThreshold    *float64
 	NumSpeakers             int
@@ -57,15 +58,16 @@ type CreateTranscriptRequest struct {
 
 // Transcript is a speech-to-text transcript response.
 type Transcript struct {
-	Text                string           `json:"text,omitempty"`
-	LanguageCode        string           `json:"language_code,omitempty"`
-	LanguageProbability float64          `json:"language_probability,omitempty"`
-	Words               []TranscriptWord `json:"words,omitempty"`
-	ChannelIndex        *int             `json:"channel_index,omitempty"`
-	TranscriptionID     string           `json:"transcription_id,omitempty"`
-	AudioDurationSecs   *float64         `json:"audio_duration_secs,omitempty"`
-	Entities            []DetectedEntity `json:"entities,omitempty"`
-	Transcripts         []Transcript     `json:"transcripts,omitempty"`
+	Text                string                       `json:"text,omitempty"`
+	LanguageCode        string                       `json:"language_code,omitempty"`
+	LanguageProbability float64                      `json:"language_probability,omitempty"`
+	Words               []TranscriptWord             `json:"words,omitempty"`
+	ChannelIndex        *int                         `json:"channel_index,omitempty"`
+	AdditionalFormats   []TranscriptAdditionalFormat `json:"additional_formats,omitempty"`
+	TranscriptionID     string                       `json:"transcription_id,omitempty"`
+	AudioDurationSecs   *float64                     `json:"audio_duration_secs,omitempty"`
+	Entities            []DetectedEntity             `json:"entities,omitempty"`
+	Transcripts         []Transcript                 `json:"transcripts,omitempty"`
 }
 
 // TranscriptWord is a word-level transcript segment.
@@ -93,6 +95,28 @@ type DetectedEntity struct {
 	EntityType string `json:"entity_type"`
 	StartChar  int    `json:"start_char"`
 	EndChar    int    `json:"end_char"`
+}
+
+// TranscriptAdditionalFormatOptions configures an additional transcript export
+// format.
+type TranscriptAdditionalFormatOptions struct {
+	Format                      string   `json:"format"`
+	IncludeSpeakers             *bool    `json:"include_speakers,omitempty"`
+	IncludeTimestamps           *bool    `json:"include_timestamps,omitempty"`
+	SegmentOnSilenceLongerThanS *float64 `json:"segment_on_silence_longer_than_s,omitempty"`
+	MaxSegmentDurationS         *float64 `json:"max_segment_duration_s,omitempty"`
+	MaxSegmentChars             *int     `json:"max_segment_chars,omitempty"`
+	MaxCharactersPerLine        *int     `json:"max_characters_per_line,omitempty"`
+}
+
+// TranscriptAdditionalFormat is an additional transcript export returned by
+// the API.
+type TranscriptAdditionalFormat struct {
+	RequestedFormat string `json:"requested_format"`
+	FileExtension   string `json:"file_extension"`
+	ContentType     string `json:"content_type"`
+	IsBase64Encoded bool   `json:"is_base64_encoded"`
+	Content         string `json:"content"`
 }
 
 // TranscriptWebhookResponse is returned when a transcript is submitted for
@@ -340,6 +364,15 @@ func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest)
 	}
 	if in.TimestampsGranularity != "" {
 		if err := mw.WriteField("timestamps_granularity", in.TimestampsGranularity); err != nil {
+			return err
+		}
+	}
+	if len(in.AdditionalFormats) > 0 {
+		formats, err := json.Marshal(in.AdditionalFormats)
+		if err != nil {
+			return fmt.Errorf("marshal additional_formats: %w", err)
+		}
+		if err := mw.WriteField("additional_formats", string(formats)); err != nil {
 			return err
 		}
 	}

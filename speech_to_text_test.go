@@ -473,6 +473,76 @@ func TestCreateTranscriptSendsEnableLoggingQuery(t *testing.T) {
 	}
 }
 
+func TestCreateTranscriptSendsAndParsesAdditionalFormats(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form := readMultipartForm(t, r)
+
+		var formats []TranscriptAdditionalFormatOptions
+		if err := json.Unmarshal([]byte(form.Value["additional_formats"][0]), &formats); err != nil {
+			t.Fatalf("additional_formats is not JSON: %v", err)
+		}
+		if len(formats) != 2 {
+			t.Fatalf("additional_formats length = %d, want 2", len(formats))
+		}
+		if formats[0].Format != "srt" || formats[0].MaxCharactersPerLine == nil || *formats[0].MaxCharactersPerLine != 42 {
+			t.Fatalf("formats[0] = %#v, want srt with max line length", formats[0])
+		}
+		if formats[1].Format != "docx" || formats[1].IncludeSpeakers == nil || !*formats[1].IncludeSpeakers {
+			t.Fatalf("formats[1] = %#v, want docx with speakers", formats[1])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"text": "Hello",
+			"additional_formats": [
+				{
+					"requested_format": "srt",
+					"file_extension": "srt",
+					"content_type": "application/x-subrip",
+					"is_base64_encoded": false,
+					"content": "1\n00:00:00,000 --> 00:00:01,000\nHello\n"
+				}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+		ModelID:   "scribe_v2",
+		SourceURL: "https://example.com/audio.mp3",
+		AdditionalFormats: []TranscriptAdditionalFormatOptions{
+			{
+				Format:               "srt",
+				MaxCharactersPerLine: intPtr(42),
+				IncludeSpeakers:      boolPtr(false),
+				IncludeTimestamps:    boolPtr(true),
+				MaxSegmentChars:      intPtr(84),
+			},
+			{
+				Format:                      "docx",
+				IncludeSpeakers:             boolPtr(true),
+				SegmentOnSilenceLongerThanS: floatPtr(0.8),
+				MaxSegmentDurationS:         floatPtr(4),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscript returned error: %v", err)
+	}
+	if len(transcript.AdditionalFormats) != 1 {
+		t.Fatalf("AdditionalFormats length = %d, want 1", len(transcript.AdditionalFormats))
+	}
+	format := transcript.AdditionalFormats[0]
+	if format.RequestedFormat != "srt" || format.FileExtension != "srt" || format.Content == "" {
+		t.Fatalf("AdditionalFormats[0] = %#v, want srt content", format)
+	}
+}
+
 func TestCreateTranscriptValidatesRequiredInput(t *testing.T) {
 	client := NewClient("test-key")
 
