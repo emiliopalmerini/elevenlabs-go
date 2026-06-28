@@ -176,6 +176,60 @@ func TestCreateTranscriptAcceptsSourceURL(t *testing.T) {
 	}
 }
 
+func TestCreateTranscriptSendsAdvancedRequestFields(t *testing.T) {
+	ctx := context.Background()
+	tagAudioEvents := false
+	noVerbatim := true
+	webhook := true
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form := readMultipartForm(t, r)
+
+		assertFormValue(t, form.Value, "model_id", "scribe_v1")
+		assertFormValue(t, form.Value, "source_url", "https://example.com/audio.mp3")
+		assertFormValue(t, form.Value, "num_speakers", "2")
+		assertFormValue(t, form.Value, "tag_audio_events", "false")
+		assertFormValue(t, form.Value, "no_verbatim", "true")
+		assertFormValue(t, form.Value, "webhook", "true")
+		assertFormValue(t, form.Value, "webhook_id", "wh_123")
+
+		var metadata map[string]any
+		if err := json.Unmarshal([]byte(form.Value["webhook_metadata"][0]), &metadata); err != nil {
+			t.Fatalf("webhook_metadata is not JSON: %v", err)
+		}
+		if metadata["job_id"] != "job_123" || metadata["source"] != "test" {
+			t.Fatalf("webhook_metadata = %#v, want job_id and source", metadata)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"text":"accepted"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+		ModelID:        "scribe_v1",
+		SourceURL:      "https://example.com/audio.mp3",
+		NumSpeakers:    2,
+		TagAudioEvents: &tagAudioEvents,
+		NoVerbatim:     &noVerbatim,
+		Webhook:        &webhook,
+		WebhookID:      "wh_123",
+		WebhookMetadata: map[string]any{
+			"job_id": "job_123",
+			"source": "test",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscript returned error: %v", err)
+	}
+	if transcript.Text != "accepted" {
+		t.Fatalf("Text = %q, want accepted", transcript.Text)
+	}
+}
+
 func TestCreateTranscriptValidatesRequiredInput(t *testing.T) {
 	client := NewClient("test-key")
 

@@ -3,6 +3,7 @@ package elevenlabs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -32,7 +33,12 @@ type CreateTranscriptRequest struct {
 	LanguageCode            string
 	TimestampsGranularity   string
 	Diarize                 *bool
+	NumSpeakers             int
+	TagAudioEvents          *bool
+	NoVerbatim              *bool
 	Webhook                 *bool
+	WebhookID               string
+	WebhookMetadata         map[string]any
 	UseMultiChannel         *bool
 	MultichannelOutputStyle string
 	Keyterms                []string
@@ -268,8 +274,37 @@ func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest)
 			return err
 		}
 	}
+	if in.NumSpeakers > 0 {
+		if err := mw.WriteField("num_speakers", strconv.Itoa(in.NumSpeakers)); err != nil {
+			return err
+		}
+	}
+	if in.TagAudioEvents != nil {
+		if err := mw.WriteField("tag_audio_events", strconv.FormatBool(*in.TagAudioEvents)); err != nil {
+			return err
+		}
+	}
+	if in.NoVerbatim != nil {
+		if err := mw.WriteField("no_verbatim", strconv.FormatBool(*in.NoVerbatim)); err != nil {
+			return err
+		}
+	}
 	if in.Webhook != nil {
 		if err := mw.WriteField("webhook", strconv.FormatBool(*in.Webhook)); err != nil {
+			return err
+		}
+	}
+	if in.WebhookID != "" {
+		if err := mw.WriteField("webhook_id", in.WebhookID); err != nil {
+			return err
+		}
+	}
+	if len(in.WebhookMetadata) > 0 {
+		metadata, err := json.Marshal(in.WebhookMetadata)
+		if err != nil {
+			return fmt.Errorf("marshal webhook_metadata: %w", err)
+		}
+		if err := mw.WriteField("webhook_metadata", string(metadata)); err != nil {
 			return err
 		}
 	}
