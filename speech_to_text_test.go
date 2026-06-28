@@ -390,6 +390,56 @@ func TestCreateTranscriptSendsAdvancedRequestFields(t *testing.T) {
 	}
 }
 
+func TestCreateTranscriptSendsRemainingRequestFields(t *testing.T) {
+	ctx := context.Background()
+	useSpeakerLibrary := true
+	detectSpeakerRoles := true
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		form := readMultipartForm(t, r)
+
+		assertFormValue(t, form.Value, "model_id", "scribe_v2")
+		assertFormValue(t, form.Value, "source_url", "https://example.com/audio.pcm")
+		assertFormValue(t, form.Value, "diarization_threshold", "0.33")
+		assertFormValue(t, form.Value, "file_format", "pcm_s16le_16")
+		assertFormValue(t, form.Value, "temperature", "0.7")
+		assertFormValue(t, form.Value, "seed", "1234")
+		assertFormValues(t, form.Value, "entity_detection", []string{"pii", "phi"})
+		assertFormValue(t, form.Value, "use_speaker_library", "true")
+		assertFormValue(t, form.Value, "detect_speaker_roles", "true")
+		assertFormValues(t, form.Value, "entity_redaction", []string{"email_address", "phone_number"})
+		assertFormValue(t, form.Value, "entity_redaction_mode", "entity_type")
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"text":"accepted"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+		ModelID:               "scribe_v2",
+		SourceURL:             "https://example.com/audio.pcm",
+		DiarizationThreshold:  floatPtr(0.33),
+		FileFormat:            "pcm_s16le_16",
+		Temperature:           floatPtr(0.7),
+		Seed:                  intPtr(1234),
+		EntityDetection:       []string{"pii", "phi"},
+		UseSpeakerLibrary:     &useSpeakerLibrary,
+		DetectSpeakerRoles:    &detectSpeakerRoles,
+		EntityRedaction:       []string{"email_address", "phone_number"},
+		EntityRedactionMode:   "entity_type",
+		TimestampsGranularity: "word",
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscript returned error: %v", err)
+	}
+	if transcript.Text != "accepted" {
+		t.Fatalf("Text = %q, want accepted", transcript.Text)
+	}
+}
+
 func TestCreateTranscriptValidatesRequiredInput(t *testing.T) {
 	client := NewClient("test-key")
 
@@ -549,6 +599,14 @@ func TestDeleteTranscriptReturnsAPIError(t *testing.T) {
 }
 
 func boolPtr(v bool) *bool {
+	return &v
+}
+
+func floatPtr(v float64) *float64 {
+	return &v
+}
+
+func intPtr(v int) *int {
 	return &v
 }
 

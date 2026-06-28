@@ -33,14 +33,23 @@ type CreateTranscriptRequest struct {
 	LanguageCode            string
 	TimestampsGranularity   string
 	Diarize                 *bool
+	DiarizationThreshold    *float64
 	NumSpeakers             int
 	TagAudioEvents          *bool
 	NoVerbatim              *bool
 	Webhook                 *bool
 	WebhookID               string
 	WebhookMetadata         map[string]any
+	FileFormat              string
+	Temperature             *float64
+	Seed                    *int
 	UseMultiChannel         *bool
 	MultichannelOutputStyle string
+	EntityDetection         []string
+	UseSpeakerLibrary       *bool
+	DetectSpeakerRoles      *bool
+	EntityRedaction         []string
+	EntityRedactionMode     string
 	Keyterms                []string
 	ExtraFormFields         map[string][]string
 }
@@ -327,6 +336,11 @@ func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest)
 			return err
 		}
 	}
+	if in.DiarizationThreshold != nil {
+		if err := mw.WriteField("diarization_threshold", strconv.FormatFloat(*in.DiarizationThreshold, 'f', -1, 64)); err != nil {
+			return err
+		}
+	}
 	if in.NumSpeakers > 0 {
 		if err := mw.WriteField("num_speakers", strconv.Itoa(in.NumSpeakers)); err != nil {
 			return err
@@ -361,6 +375,21 @@ func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest)
 			return err
 		}
 	}
+	if in.FileFormat != "" {
+		if err := mw.WriteField("file_format", in.FileFormat); err != nil {
+			return err
+		}
+	}
+	if in.Temperature != nil {
+		if err := mw.WriteField("temperature", strconv.FormatFloat(*in.Temperature, 'f', -1, 64)); err != nil {
+			return err
+		}
+	}
+	if in.Seed != nil {
+		if err := mw.WriteField("seed", strconv.Itoa(*in.Seed)); err != nil {
+			return err
+		}
+	}
 	if in.UseMultiChannel != nil {
 		if err := mw.WriteField("use_multi_channel", strconv.FormatBool(*in.UseMultiChannel)); err != nil {
 			return err
@@ -368,6 +397,31 @@ func writeCreateTranscriptForm(mw *multipart.Writer, in CreateTranscriptRequest)
 	}
 	if in.MultichannelOutputStyle != "" {
 		if err := mw.WriteField("multichannel_output_style", in.MultichannelOutputStyle); err != nil {
+			return err
+		}
+	}
+	for _, entity := range in.EntityDetection {
+		if err := mw.WriteField("entity_detection", entity); err != nil {
+			return err
+		}
+	}
+	if in.UseSpeakerLibrary != nil {
+		if err := mw.WriteField("use_speaker_library", strconv.FormatBool(*in.UseSpeakerLibrary)); err != nil {
+			return err
+		}
+	}
+	if in.DetectSpeakerRoles != nil {
+		if err := mw.WriteField("detect_speaker_roles", strconv.FormatBool(*in.DetectSpeakerRoles)); err != nil {
+			return err
+		}
+	}
+	for _, entity := range in.EntityRedaction {
+		if err := mw.WriteField("entity_redaction", entity); err != nil {
+			return err
+		}
+	}
+	if in.EntityRedactionMode != "" {
+		if err := mw.WriteField("entity_redaction_mode", in.EntityRedactionMode); err != nil {
 			return err
 		}
 	}
