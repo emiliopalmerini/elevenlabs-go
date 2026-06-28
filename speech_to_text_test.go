@@ -440,6 +440,39 @@ func TestCreateTranscriptSendsRemainingRequestFields(t *testing.T) {
 	}
 }
 
+func TestCreateTranscriptSendsEnableLoggingQuery(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("enable_logging"); got != "false" {
+			t.Fatalf("enable_logging query = %q, want false", got)
+		}
+		form := readMultipartForm(t, r)
+		if _, ok := form.Value["enable_logging"]; ok {
+			t.Fatal("enable_logging should be a query parameter, not a form field")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"text":"accepted"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+		ModelID:       "scribe_v2",
+		SourceURL:     "https://example.com/audio.mp3",
+		EnableLogging: boolPtr(false),
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscript returned error: %v", err)
+	}
+	if transcript.Text != "accepted" {
+		t.Fatalf("Text = %q, want accepted", transcript.Text)
+	}
+}
+
 func TestCreateTranscriptValidatesRequiredInput(t *testing.T) {
 	client := NewClient("test-key")
 

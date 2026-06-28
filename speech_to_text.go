@@ -29,6 +29,7 @@ type CreateTranscriptRequest struct {
 	File            *File
 	SourceURL       string
 	CloudStorageURL string
+	EnableLogging   *bool
 
 	LanguageCode            string
 	TimestampsGranularity   string
@@ -142,7 +143,7 @@ func (c *Client) doCreateTranscript(ctx context.Context, in CreateTranscriptRequ
 			return nil, err
 		}
 
-		req, err := c.newRequest(ctx, http.MethodPost, "/v1/speech-to-text", reader)
+		req, err := c.newRequest(ctx, http.MethodPost, createTranscriptPath(in), reader)
 		if err != nil {
 			if closer, ok := reader.(io.Closer); ok {
 				_ = closer.Close()
@@ -192,6 +193,17 @@ func (c *Client) DeleteTranscript(ctx context.Context, id string) error {
 
 func transcriptPath(id string) string {
 	return "/v1/speech-to-text/transcripts/" + url.PathEscape(id)
+}
+
+func createTranscriptPath(in CreateTranscriptRequest) string {
+	path := "/v1/speech-to-text"
+	if in.EnableLogging == nil {
+		return path
+	}
+
+	values := url.Values{}
+	values.Set("enable_logging", strconv.FormatBool(*in.EnableLogging))
+	return path + "?" + values.Encode()
 }
 
 func validateCreateTranscriptRequest(in CreateTranscriptRequest) error {
