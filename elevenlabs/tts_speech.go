@@ -1,4 +1,4 @@
-package texttospeech
+package elevenlabs
 
 import (
 	"bufio"
@@ -10,14 +10,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
-
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 )
 
 // CreateSpeech converts text into speech and returns the generated audio bytes.
-func (c *Client) CreateSpeech(ctx context.Context, in CreateSpeechRequest) ([]byte, error) {
+func (c *TTSService) CreateSpeech(ctx context.Context, in CreateSpeechRequest) ([]byte, error) {
 	resp, err := c.CreateSpeechWithResponse(ctx, in)
 	if err != nil {
 		return nil, err
@@ -27,12 +24,12 @@ func (c *Client) CreateSpeech(ctx context.Context, in CreateSpeechRequest) ([]by
 
 // CreateSpeechWithResponse converts text into speech and returns HTTP response
 // metadata.
-func (c *Client) CreateSpeechWithResponse(ctx context.Context, in CreateSpeechRequest) (*elevenlabs.Response[[]byte], error) {
+func (c *TTSService) CreateSpeechWithResponse(ctx context.Context, in CreateSpeechRequest) (*Response[[]byte], error) {
 	body, raw, err := c.doSpeech(ctx, in, "")
 	if err != nil {
 		return nil, err
 	}
-	return &elevenlabs.Response[[]byte]{
+	return &Response[[]byte]{
 		Data:        body,
 		RawResponse: raw,
 	}, nil
@@ -40,7 +37,7 @@ func (c *Client) CreateSpeechWithResponse(ctx context.Context, in CreateSpeechRe
 
 // CreateSpeechWithTimestamps converts text into speech and returns generated
 // audio with character-level timing information.
-func (c *Client) CreateSpeechWithTimestamps(ctx context.Context, in CreateSpeechRequest) (*AudioWithTimestamps, error) {
+func (c *TTSService) CreateSpeechWithTimestamps(ctx context.Context, in CreateSpeechRequest) (*AudioWithTimestamps, error) {
 	resp, err := c.CreateSpeechWithTimestampsWithResponse(ctx, in)
 	if err != nil {
 		return nil, err
@@ -50,13 +47,13 @@ func (c *Client) CreateSpeechWithTimestamps(ctx context.Context, in CreateSpeech
 
 // CreateSpeechWithTimestampsWithResponse converts text into speech with timing
 // information and returns HTTP response metadata.
-func (c *Client) CreateSpeechWithTimestampsWithResponse(ctx context.Context, in CreateSpeechRequest) (*elevenlabs.Response[*AudioWithTimestamps], error) {
+func (c *TTSService) CreateSpeechWithTimestampsWithResponse(ctx context.Context, in CreateSpeechRequest) (*Response[*AudioWithTimestamps], error) {
 	var out AudioWithTimestamps
 	raw, err := c.doSpeechJSON(ctx, in, "/with-timestamps", &out)
 	if err != nil {
 		return nil, err
 	}
-	return &elevenlabs.Response[*AudioWithTimestamps]{
+	return &Response[*AudioWithTimestamps]{
 		Data:        &out,
 		RawResponse: raw,
 	}, nil
@@ -64,7 +61,7 @@ func (c *Client) CreateSpeechWithTimestampsWithResponse(ctx context.Context, in 
 
 // StreamSpeech converts text into speech and returns a streaming audio body.
 // The caller must close the returned stream.
-func (c *Client) StreamSpeech(ctx context.Context, in CreateSpeechRequest) (*AudioStream, error) {
+func (c *TTSService) StreamSpeech(ctx context.Context, in CreateSpeechRequest) (*AudioStream, error) {
 	resp, err := c.StreamSpeechWithResponse(ctx, in)
 	if err != nil {
 		return nil, err
@@ -74,12 +71,12 @@ func (c *Client) StreamSpeech(ctx context.Context, in CreateSpeechRequest) (*Aud
 
 // StreamSpeechWithResponse converts text into speech, returns a streaming audio
 // body, and includes HTTP response metadata. The caller must close Data.
-func (c *Client) StreamSpeechWithResponse(ctx context.Context, in CreateSpeechRequest) (*elevenlabs.Response[*AudioStream], error) {
+func (c *TTSService) StreamSpeechWithResponse(ctx context.Context, in CreateSpeechRequest) (*Response[*AudioStream], error) {
 	body, raw, err := c.doSpeechStream(ctx, in, "/stream")
 	if err != nil {
 		return nil, err
 	}
-	return &elevenlabs.Response[*AudioStream]{
+	return &Response[*AudioStream]{
 		Data:        newAudioStream(body),
 		RawResponse: raw,
 	}, nil
@@ -87,7 +84,7 @@ func (c *Client) StreamSpeechWithResponse(ctx context.Context, in CreateSpeechRe
 
 // StreamSpeechWithTimestamps converts text into speech and returns a stream of
 // timestamped audio chunks. The caller must close the returned stream.
-func (c *Client) StreamSpeechWithTimestamps(ctx context.Context, in CreateSpeechRequest) (*TimestampStream, error) {
+func (c *TTSService) StreamSpeechWithTimestamps(ctx context.Context, in CreateSpeechRequest) (*TimestampStream, error) {
 	resp, err := c.StreamSpeechWithTimestampsWithResponse(ctx, in)
 	if err != nil {
 		return nil, err
@@ -98,21 +95,21 @@ func (c *Client) StreamSpeechWithTimestamps(ctx context.Context, in CreateSpeech
 // StreamSpeechWithTimestampsWithResponse converts text into speech, returns a
 // stream of timestamped audio chunks, and includes HTTP response metadata. The
 // caller must close Data.
-func (c *Client) StreamSpeechWithTimestampsWithResponse(ctx context.Context, in CreateSpeechRequest) (*elevenlabs.Response[*TimestampStream], error) {
+func (c *TTSService) StreamSpeechWithTimestampsWithResponse(ctx context.Context, in CreateSpeechRequest) (*Response[*TimestampStream], error) {
 	body, raw, err := c.doSpeechStream(ctx, in, "/stream/with-timestamps")
 	if err != nil {
 		return nil, err
 	}
-	return &elevenlabs.Response[*TimestampStream]{
+	return &Response[*TimestampStream]{
 		Data:        newTimestampStream(body),
 		RawResponse: raw,
 	}, nil
 }
 
-func (c *Client) doSpeech(ctx context.Context, in CreateSpeechRequest, suffix string) ([]byte, elevenlabs.RawResponse, error) {
+func (c *TTSService) doSpeech(ctx context.Context, in CreateSpeechRequest, suffix string) ([]byte, RawResponse, error) {
 	core, payload, err := c.prepareSpeechRequest(in)
 	if err != nil {
-		return nil, elevenlabs.RawResponse{}, err
+		return nil, RawResponse{}, err
 	}
 
 	build := func(ctx context.Context) (*http.Request, error) {
@@ -127,21 +124,21 @@ func (c *Client) doSpeech(ctx context.Context, in CreateSpeechRequest, suffix st
 	return core.Do(ctx, build, true)
 }
 
-func (c *Client) doSpeechJSON(ctx context.Context, in CreateSpeechRequest, suffix string, out any) (elevenlabs.RawResponse, error) {
+func (c *TTSService) doSpeechJSON(ctx context.Context, in CreateSpeechRequest, suffix string, out any) (RawResponse, error) {
 	body, raw, err := c.doSpeech(ctx, in, suffix)
 	if err != nil {
 		return raw, err
 	}
-	if err := elevenlabs.DecodeResponse(body, out); err != nil {
+	if err := DecodeResponse(body, out); err != nil {
 		return raw, err
 	}
 	return raw, nil
 }
 
-func (c *Client) doSpeechStream(ctx context.Context, in CreateSpeechRequest, suffix string) (io.ReadCloser, elevenlabs.RawResponse, error) {
+func (c *TTSService) doSpeechStream(ctx context.Context, in CreateSpeechRequest, suffix string) (io.ReadCloser, RawResponse, error) {
 	core, payload, err := c.prepareSpeechRequest(in)
 	if err != nil {
-		return nil, elevenlabs.RawResponse{}, err
+		return nil, RawResponse{}, err
 	}
 
 	build := func(ctx context.Context) (*http.Request, error) {
@@ -156,7 +153,7 @@ func (c *Client) doSpeechStream(ctx context.Context, in CreateSpeechRequest, suf
 	return core.DoStream(ctx, build, true)
 }
 
-func (c *Client) prepareSpeechRequest(in CreateSpeechRequest) (*elevenlabs.Client, []byte, error) {
+func (c *TTSService) prepareSpeechRequest(in CreateSpeechRequest) (*Client, []byte, error) {
 	if err := validateCreateSpeechRequest(in); err != nil {
 		return nil, nil, err
 	}
@@ -195,24 +192,6 @@ func speechPath(in CreateSpeechRequest, suffix string) string {
 		return path
 	}
 	return path + "?" + values.Encode()
-}
-
-func setStringQuery(query url.Values, name, value string) {
-	if strings.TrimSpace(value) != "" {
-		query.Set(name, value)
-	}
-}
-
-func setBoolQuery(query url.Values, name string, value *bool) {
-	if value != nil {
-		query.Set(name, strconv.FormatBool(*value))
-	}
-}
-
-func setIntQuery(query url.Values, name string, value *int) {
-	if value != nil {
-		query.Set(name, strconv.Itoa(*value))
-	}
 }
 
 // TimestampStream reads timestamped audio chunks from an HTTP streaming

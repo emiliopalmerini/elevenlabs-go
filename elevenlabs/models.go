@@ -1,6 +1,14 @@
 package elevenlabs
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ModelsService provides ElevenLabs model APIs.
+type ModelsService struct {
+	client *Client
+}
 
 // Model contains metadata for an ElevenLabs model.
 type Model struct {
@@ -35,20 +43,24 @@ type ModelRates struct {
 	CostDiscountMultiplier  float64 `json:"cost_discount_multiplier,omitempty"`
 }
 
-// ListModels gets the list of available models.
-func (c *Client) ListModels(ctx context.Context) ([]Model, error) {
-	resp, err := c.ListModelsWithResponse(ctx)
+// List gets the list of available models.
+func (s *ModelsService) List(ctx context.Context) ([]Model, error) {
+	resp, err := s.ListWithResponse(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return resp.Data, nil
 }
 
-// ListModelsWithResponse gets the list of available models and returns HTTP
-// response metadata.
-func (c *Client) ListModelsWithResponse(ctx context.Context) (*Response[[]Model], error) {
+// ListWithResponse gets the list of available models and returns HTTP response
+// metadata.
+func (s *ModelsService) ListWithResponse(ctx context.Context) (*Response[[]Model], error) {
 	var out []Model
-	raw, err := c.getJSON(ctx, "/v1/models", &out)
+	client, err := s.apiClient()
+	if err != nil {
+		return nil, err
+	}
+	raw, err := client.getJSON(ctx, "/v1/models", &out)
 	if err != nil {
 		return nil, err
 	}
@@ -57,4 +69,11 @@ func (c *Client) ListModelsWithResponse(ctx context.Context) (*Response[[]Model]
 		Data:        out,
 		RawResponse: raw,
 	}, nil
+}
+
+func (s *ModelsService) apiClient() (*Client, error) {
+	if s == nil || s.client == nil {
+		return nil, errors.New("elevenlabs: nil client")
+	}
+	return s.client, nil
 }

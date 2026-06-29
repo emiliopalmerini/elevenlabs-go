@@ -1,4 +1,4 @@
-package texttospeech
+package elevenlabs
 
 import (
 	"context"
@@ -7,12 +7,11 @@ import (
 	"net/url"
 	"strings"
 
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 	"golang.org/x/net/websocket"
 )
 
-// StreamInputRequest configures a text-to-speech WebSocket connection.
-type StreamInputRequest struct {
+// TTSStreamInputRequest configures a text-to-speech WebSocket connection.
+type TTSStreamInputRequest struct {
 	VoiceID string
 
 	Authorization  string
@@ -30,20 +29,20 @@ type StreamInputRequest struct {
 	Seed                   *int
 }
 
-// StreamInputSession is an active text-to-speech WebSocket session.
-type StreamInputSession struct {
+// TTSStreamInputSession is an active text-to-speech WebSocket session.
+type TTSStreamInputSession struct {
 	conn *websocket.Conn
 }
 
-// MultiStreamInputSession is an active multi-context text-to-speech WebSocket
+// TTSMultiStreamInputSession is an active multi-context text-to-speech WebSocket
 // session.
-type MultiStreamInputSession struct {
+type TTSMultiStreamInputSession struct {
 	conn *websocket.Conn
 }
 
-// StreamInitializeMessage is the first message sent to a single-context
+// TTSStreamInitializeMessage is the first message sent to a single-context
 // WebSocket stream.
-type StreamInitializeMessage struct {
+type TTSStreamInitializeMessage struct {
 	Text                            string                           `json:"text"`
 	VoiceSettings                   *VoiceSettings                   `json:"voice_settings,omitempty"`
 	GenerationConfig                *GenerationConfig                `json:"generation_config,omitempty"`
@@ -52,8 +51,8 @@ type StreamInitializeMessage struct {
 	Authorization                   string                           `json:"authorization,omitempty"`
 }
 
-// StreamTextMessage sends text to a single-context WebSocket stream.
-type StreamTextMessage struct {
+// TTSStreamTextMessage sends text to a single-context WebSocket stream.
+type TTSStreamTextMessage struct {
 	Text                 string            `json:"text"`
 	TryTriggerGeneration *bool             `json:"try_trigger_generation,omitempty"`
 	VoiceSettings        *VoiceSettings    `json:"voice_settings,omitempty"`
@@ -61,9 +60,9 @@ type StreamTextMessage struct {
 	Flush                *bool             `json:"flush,omitempty"`
 }
 
-// MultiStreamContextMessage initializes or re-initializes one multi-context
+// TTSMultiStreamContextMessage initializes or re-initializes one multi-context
 // WebSocket context.
-type MultiStreamContextMessage struct {
+type TTSMultiStreamContextMessage struct {
 	Text                            string                           `json:"text"`
 	VoiceSettings                   *VoiceSettings                   `json:"voice_settings,omitempty"`
 	GenerationConfig                *GenerationConfig                `json:"generation_config,omitempty"`
@@ -73,40 +72,40 @@ type MultiStreamContextMessage struct {
 	ContextID                       string                           `json:"context_id,omitempty"`
 }
 
-// MultiStreamTextMessage sends text to a multi-context WebSocket context.
-type MultiStreamTextMessage struct {
+// TTSMultiStreamTextMessage sends text to a multi-context WebSocket context.
+type TTSMultiStreamTextMessage struct {
 	Text      string `json:"text"`
 	ContextID string `json:"context_id,omitempty"`
 	Flush     *bool  `json:"flush,omitempty"`
 }
 
-// MultiStreamFlushMessage flushes one multi-context WebSocket context.
-type MultiStreamFlushMessage struct {
+// TTSMultiStreamFlushMessage flushes one multi-context WebSocket context.
+type TTSMultiStreamFlushMessage struct {
 	ContextID string `json:"context_id"`
 	Text      string `json:"text,omitempty"`
 	Flush     bool   `json:"flush"`
 }
 
 // ConnectStreamInput opens a text-to-speech WebSocket session.
-func (c *Client) ConnectStreamInput(ctx context.Context, in StreamInputRequest) (*StreamInputSession, error) {
+func (c *TTSService) ConnectStreamInput(ctx context.Context, in TTSStreamInputRequest) (*TTSStreamInputSession, error) {
 	conn, err := c.connectInput(ctx, in, "/stream-input")
 	if err != nil {
 		return nil, err
 	}
-	return &StreamInputSession{conn: conn}, nil
+	return &TTSStreamInputSession{conn: conn}, nil
 }
 
 // ConnectMultiStreamInput opens a multi-context text-to-speech WebSocket
 // session.
-func (c *Client) ConnectMultiStreamInput(ctx context.Context, in StreamInputRequest) (*MultiStreamInputSession, error) {
+func (c *TTSService) ConnectMultiStreamInput(ctx context.Context, in TTSStreamInputRequest) (*TTSMultiStreamInputSession, error) {
 	conn, err := c.connectInput(ctx, in, "/multi-stream-input")
 	if err != nil {
 		return nil, err
 	}
-	return &MultiStreamInputSession{conn: conn}, nil
+	return &TTSMultiStreamInputSession{conn: conn}, nil
 }
 
-func (c *Client) connectInput(ctx context.Context, in StreamInputRequest, suffix string) (*websocket.Conn, error) {
+func (c *TTSService) connectInput(ctx context.Context, in TTSStreamInputRequest, suffix string) (*websocket.Conn, error) {
 	core, err := c.apiClient()
 	if err != nil {
 		return nil, err
@@ -133,7 +132,7 @@ func (c *Client) connectInput(ctx context.Context, in StreamInputRequest, suffix
 	return config.DialContext(ctx)
 }
 
-func streamInputEndpoint(core *elevenlabs.Client, in StreamInputRequest, suffix string) (string, string, bool, error) {
+func streamInputEndpoint(core *Client, in TTSStreamInputRequest, suffix string) (string, string, bool, error) {
 	if strings.TrimSpace(in.VoiceID) == "" {
 		return "", "", false, errors.New("elevenlabs: voice_id is required")
 	}
@@ -188,7 +187,7 @@ func streamInputEndpoint(core *elevenlabs.Client, in StreamInputRequest, suffix 
 
 // Initialize sends the required first single-context WebSocket message. When
 // Text is empty, it defaults to one blank space.
-func (s *StreamInputSession) Initialize(in StreamInitializeMessage) error {
+func (s *TTSStreamInputSession) Initialize(in TTSStreamInitializeMessage) error {
 	if in.Text == "" {
 		in.Text = " "
 	}
@@ -196,28 +195,28 @@ func (s *StreamInputSession) Initialize(in StreamInitializeMessage) error {
 }
 
 // SendText sends text to a single-context WebSocket stream.
-func (s *StreamInputSession) SendText(in StreamTextMessage) error {
+func (s *TTSStreamInputSession) SendText(in TTSStreamTextMessage) error {
 	return s.send(in)
 }
 
 // Flush forces audio generation for buffered single-context text.
-func (s *StreamInputSession) Flush(text string) error {
+func (s *TTSStreamInputSession) Flush(text string) error {
 	flush := true
-	return s.SendText(StreamTextMessage{Text: text, Flush: &flush})
+	return s.SendText(TTSStreamTextMessage{Text: text, Flush: &flush})
 }
 
 // CloseInput sends the empty text message that closes a single-context input
 // stream.
-func (s *StreamInputSession) CloseInput() error {
-	return s.SendText(StreamTextMessage{Text: ""})
+func (s *TTSStreamInputSession) CloseInput() error {
+	return s.SendText(TTSStreamTextMessage{Text: ""})
 }
 
 // Receive reads one event from a single-context WebSocket stream.
-func (s *StreamInputSession) Receive() (*StreamInputEvent, error) {
+func (s *TTSStreamInputSession) Receive() (*TTSStreamInputEvent, error) {
 	if s == nil || s.conn == nil {
 		return nil, errors.New("elevenlabs: nil text-to-speech stream session")
 	}
-	var event StreamInputEvent
+	var event TTSStreamInputEvent
 	if err := websocket.JSON.Receive(s.conn, &event); err != nil {
 		return nil, err
 	}
@@ -225,14 +224,14 @@ func (s *StreamInputSession) Receive() (*StreamInputEvent, error) {
 }
 
 // Close closes the single-context WebSocket stream.
-func (s *StreamInputSession) Close() error {
+func (s *TTSStreamInputSession) Close() error {
 	if s == nil || s.conn == nil {
 		return nil
 	}
 	return s.conn.Close()
 }
 
-func (s *StreamInputSession) send(v any) error {
+func (s *TTSStreamInputSession) send(v any) error {
 	if s == nil || s.conn == nil {
 		return errors.New("elevenlabs: nil text-to-speech stream session")
 	}
@@ -241,7 +240,7 @@ func (s *StreamInputSession) send(v any) error {
 
 // Initialize sends the required first multi-context WebSocket message. When
 // Text is empty, it defaults to one blank space.
-func (s *MultiStreamInputSession) Initialize(in MultiStreamContextMessage) error {
+func (s *TTSMultiStreamInputSession) Initialize(in TTSMultiStreamContextMessage) error {
 	if in.Text == "" {
 		in.Text = " "
 	}
@@ -250,17 +249,17 @@ func (s *MultiStreamInputSession) Initialize(in MultiStreamContextMessage) error
 
 // InitializeContext initializes or re-initializes a multi-context WebSocket
 // context.
-func (s *MultiStreamInputSession) InitializeContext(in MultiStreamContextMessage) error {
+func (s *TTSMultiStreamInputSession) InitializeContext(in TTSMultiStreamContextMessage) error {
 	return s.send(in)
 }
 
 // SendText sends text to a multi-context WebSocket context.
-func (s *MultiStreamInputSession) SendText(in MultiStreamTextMessage) error {
+func (s *TTSMultiStreamInputSession) SendText(in TTSMultiStreamTextMessage) error {
 	return s.send(in)
 }
 
 // FlushContext flushes one multi-context WebSocket context.
-func (s *MultiStreamInputSession) FlushContext(in MultiStreamFlushMessage) error {
+func (s *TTSMultiStreamInputSession) FlushContext(in TTSMultiStreamFlushMessage) error {
 	if strings.TrimSpace(in.ContextID) == "" {
 		return errors.New("elevenlabs: context_id is required")
 	}
@@ -269,7 +268,7 @@ func (s *MultiStreamInputSession) FlushContext(in MultiStreamFlushMessage) error
 }
 
 // CloseContext closes one multi-context WebSocket context.
-func (s *MultiStreamInputSession) CloseContext(contextID string) error {
+func (s *TTSMultiStreamInputSession) CloseContext(contextID string) error {
 	if strings.TrimSpace(contextID) == "" {
 		return errors.New("elevenlabs: context_id is required")
 	}
@@ -284,7 +283,7 @@ func (s *MultiStreamInputSession) CloseContext(contextID string) error {
 
 // CloseSocket asks the server to close all contexts and the WebSocket
 // connection gracefully.
-func (s *MultiStreamInputSession) CloseSocket() error {
+func (s *TTSMultiStreamInputSession) CloseSocket() error {
 	return s.send(struct {
 		CloseSocket bool `json:"close_socket"`
 	}{
@@ -293,7 +292,7 @@ func (s *MultiStreamInputSession) CloseSocket() error {
 }
 
 // KeepContextAlive resets the inactivity timeout for one context.
-func (s *MultiStreamInputSession) KeepContextAlive(contextID string) error {
+func (s *TTSMultiStreamInputSession) KeepContextAlive(contextID string) error {
 	if strings.TrimSpace(contextID) == "" {
 		return errors.New("elevenlabs: context_id is required")
 	}
@@ -307,11 +306,11 @@ func (s *MultiStreamInputSession) KeepContextAlive(contextID string) error {
 }
 
 // Receive reads one event from a multi-context WebSocket stream.
-func (s *MultiStreamInputSession) Receive() (*StreamInputEvent, error) {
+func (s *TTSMultiStreamInputSession) Receive() (*TTSStreamInputEvent, error) {
 	if s == nil || s.conn == nil {
 		return nil, errors.New("elevenlabs: nil multi text-to-speech stream session")
 	}
-	var event StreamInputEvent
+	var event TTSStreamInputEvent
 	if err := websocket.JSON.Receive(s.conn, &event); err != nil {
 		return nil, err
 	}
@@ -319,14 +318,14 @@ func (s *MultiStreamInputSession) Receive() (*StreamInputEvent, error) {
 }
 
 // Close closes the multi-context WebSocket stream.
-func (s *MultiStreamInputSession) Close() error {
+func (s *TTSMultiStreamInputSession) Close() error {
 	if s == nil || s.conn == nil {
 		return nil
 	}
 	return s.conn.Close()
 }
 
-func (s *MultiStreamInputSession) send(v any) error {
+func (s *TTSMultiStreamInputSession) send(v any) error {
 	if s == nil || s.conn == nil {
 		return errors.New("elevenlabs: nil multi text-to-speech stream session")
 	}

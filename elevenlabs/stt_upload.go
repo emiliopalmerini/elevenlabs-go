@@ -1,4 +1,4 @@
-package speechtotext
+package elevenlabs
 
 import (
 	"bytes"
@@ -277,10 +277,10 @@ type uploadProgressReader struct {
 	sent    int64
 	total   int64
 	attempt int
-	report  func(UploadProgress)
+	report  func(TranscriptUploadProgress)
 }
 
-func newUploadProgressReader(reader io.Reader, total int64, attempt int, report func(UploadProgress)) *uploadProgressReader {
+func newUploadProgressReader(reader io.Reader, total int64, attempt int, report func(TranscriptUploadProgress)) *uploadProgressReader {
 	if attempt <= 0 {
 		attempt = 1
 	}
@@ -302,7 +302,7 @@ func (r *uploadProgressReader) Read(p []byte) (int, error) {
 }
 
 func (r *uploadProgressReader) reportProgress(done bool) {
-	r.report(UploadProgress{
+	r.report(TranscriptUploadProgress{
 		SentBytes:  r.sent,
 		TotalBytes: r.total,
 		Done:       done,
@@ -310,7 +310,7 @@ func (r *uploadProgressReader) reportProgress(done bool) {
 	})
 }
 
-func uploadTotalBytes(file *File) int64 {
+func uploadTotalBytes(file *TranscriptFile) int64 {
 	if file == nil || file.Reader == nil {
 		return -1
 	}

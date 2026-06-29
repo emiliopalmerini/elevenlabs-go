@@ -1,18 +1,16 @@
-package user
+package elevenlabs
 
 import (
 	"context"
-
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 )
 
 // Get gets information about the authenticated user.
-func (c *Client) Get(ctx context.Context) (*User, error) {
+func (c *UserService) Get(ctx context.Context) (*User, error) {
 	return c.GetUser(ctx)
 }
 
 // GetUser gets information about the authenticated user.
-func (c *Client) GetUser(ctx context.Context) (*User, error) {
+func (c *UserService) GetUser(ctx context.Context) (*User, error) {
 	resp, err := c.GetUserWithResponse(ctx)
 	if err != nil {
 		return nil, err
@@ -22,13 +20,13 @@ func (c *Client) GetUser(ctx context.Context) (*User, error) {
 
 // GetWithResponse gets information about the authenticated user and returns
 // HTTP response metadata.
-func (c *Client) GetWithResponse(ctx context.Context) (*elevenlabs.Response[*User], error) {
+func (c *UserService) GetWithResponse(ctx context.Context) (*Response[*User], error) {
 	return c.GetUserWithResponse(ctx)
 }
 
 // GetUserWithResponse gets information about the authenticated user and returns
 // HTTP response metadata.
-func (c *Client) GetUserWithResponse(ctx context.Context) (*elevenlabs.Response[*User], error) {
+func (c *UserService) GetUserWithResponse(ctx context.Context) (*Response[*User], error) {
 	core, err := c.apiClient()
 	if err != nil {
 		return nil, err
@@ -40,7 +38,7 @@ func (c *Client) GetUserWithResponse(ctx context.Context) (*elevenlabs.Response[
 		return nil, err
 	}
 
-	return &elevenlabs.Response[*User]{
+	return &Response[*User]{
 		Data:        &out,
 		RawResponse: raw,
 	}, nil
@@ -48,7 +46,7 @@ func (c *Client) GetUserWithResponse(ctx context.Context) (*elevenlabs.Response[
 
 // GetSubscription gets extended information about the authenticated user's
 // subscription.
-func (c *Client) GetSubscription(ctx context.Context) (*Subscription, error) {
+func (c *UserService) GetSubscription(ctx context.Context) (*Subscription, error) {
 	resp, err := c.GetSubscriptionWithResponse(ctx)
 	if err != nil {
 		return nil, err
@@ -58,7 +56,7 @@ func (c *Client) GetSubscription(ctx context.Context) (*Subscription, error) {
 
 // GetSubscriptionWithResponse gets extended information about the authenticated
 // user's subscription and returns HTTP response metadata.
-func (c *Client) GetSubscriptionWithResponse(ctx context.Context) (*elevenlabs.Response[*Subscription], error) {
+func (c *UserService) GetSubscriptionWithResponse(ctx context.Context) (*Response[*Subscription], error) {
 	core, err := c.apiClient()
 	if err != nil {
 		return nil, err
@@ -70,7 +68,7 @@ func (c *Client) GetSubscriptionWithResponse(ctx context.Context) (*elevenlabs.R
 		return nil, err
 	}
 
-	return &elevenlabs.Response[*Subscription]{
+	return &Response[*Subscription]{
 		Data:        &out,
 		RawResponse: raw,
 	}, nil

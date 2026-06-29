@@ -1,4 +1,4 @@
-package user
+package elevenlabs
 
 import (
 	"context"
@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 )
 
 func TestGetParsesAccountMetadata(t *testing.T) {
@@ -73,11 +71,11 @@ func TestGetParsesAccountMetadata(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		elevenlabs.WithBaseURL(server.URL),
-		elevenlabs.WithHTTPClient(server.Client()),
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
 	)
 
-	got, err := client.Get(ctx)
+	got, err := client.User.Get(ctx)
 	if err != nil {
 		t.Fatalf("Get returned error: %v", err)
 	}
@@ -143,11 +141,11 @@ func TestGetWithResponseReturnsRawMetadata(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		elevenlabs.WithBaseURL(server.URL),
-		elevenlabs.WithHTTPClient(server.Client()),
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
 	)
 
-	resp, err := client.GetWithResponse(ctx)
+	resp, err := client.User.GetWithResponse(ctx)
 	if err != nil {
 		t.Fatalf("GetWithResponse returned error: %v", err)
 	}
@@ -246,11 +244,11 @@ func TestGetSubscriptionParsesExtendedMetadata(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		elevenlabs.WithBaseURL(server.URL),
-		elevenlabs.WithHTTPClient(server.Client()),
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
 	)
 
-	got, err := client.GetSubscription(ctx)
+	got, err := client.User.GetSubscription(ctx)
 	if err != nil {
 		t.Fatalf("GetSubscription returned error: %v", err)
 	}
@@ -309,11 +307,11 @@ func TestGetSubscriptionWithResponseReturnsRawMetadata(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		elevenlabs.WithBaseURL(server.URL),
-		elevenlabs.WithHTTPClient(server.Client()),
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
 	)
 
-	resp, err := client.GetSubscriptionWithResponse(ctx)
+	resp, err := client.User.GetSubscriptionWithResponse(ctx)
 	if err != nil {
 		t.Fatalf("GetSubscriptionWithResponse returned error: %v", err)
 	}

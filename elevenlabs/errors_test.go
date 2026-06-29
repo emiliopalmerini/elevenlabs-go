@@ -151,7 +151,7 @@ func apiErrorFromListModels(t *testing.T, statusCode int, headers map[string]str
 	defer server.Close()
 
 	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()), WithoutRetries())
-	_, err := client.ListModels(context.Background())
+	_, err := client.Models.List(context.Background())
 	if err == nil {
 		t.Fatal("ListModels error = nil, want API error")
 	}

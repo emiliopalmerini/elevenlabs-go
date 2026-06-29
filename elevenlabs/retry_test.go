@@ -33,7 +33,7 @@ func TestGetUserRetriesTransientStatus(t *testing.T) {
 		WithRetryConfig(fastRetryConfig(3)),
 	)
 
-	user, err := client.GetUser(ctx)
+	user, err := client.User.GetUser(ctx)
 	if err != nil {
 		t.Fatalf("GetUser returned error: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestRetryAfterHeaderOverridesBackoff(t *testing.T) {
 		}),
 	)
 
-	user, err := client.GetUser(ctx)
+	user, err := client.User.GetUser(ctx)
 	if err != nil {
 		t.Fatalf("GetUser returned error: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestWithoutRetriesSendsOneRequest(t *testing.T) {
 		WithoutRetries(),
 	)
 
-	_, err := client.GetUser(ctx)
+	_, err := client.User.GetUser(ctx)
 	if err == nil {
 		t.Fatal("GetUser error = nil, want API error")
 	}
@@ -134,7 +134,7 @@ func TestRetryConfigControlsStatusCodes(t *testing.T) {
 		}),
 	)
 
-	_, err := client.GetUser(ctx)
+	_, err := client.User.GetUser(ctx)
 	if err == nil {
 		t.Fatal("GetUser error = nil, want API error")
 	}
@@ -165,7 +165,7 @@ func TestContextCancellationStopsRetrying(t *testing.T) {
 		}),
 	)
 
-	_, err := client.GetUser(ctx)
+	_, err := client.User.GetUser(ctx)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("GetUser error = %v, want context deadline exceeded", err)
 	}
@@ -191,7 +191,7 @@ func TestFinalFailedRetryReturnsAPIError(t *testing.T) {
 		WithRetryConfig(fastRetryConfig(2)),
 	)
 
-	_, err := client.GetUser(ctx)
+	_, err := client.User.GetUser(ctx)
 	if err == nil {
 		t.Fatal("GetUser error = nil, want API error")
 	}

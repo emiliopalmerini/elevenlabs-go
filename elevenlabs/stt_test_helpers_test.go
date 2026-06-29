@@ -1,4 +1,4 @@
-package speechtotext
+package elevenlabs
 
 import (
 	"io"

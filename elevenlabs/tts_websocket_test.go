@@ -1,4 +1,4 @@
-package texttospeech
+package elevenlabs
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 	"golang.org/x/net/websocket"
 )
 
@@ -56,7 +55,7 @@ func TestStreamInputSessionSendsMessagesAndReceivesAudio(t *testing.T) {
 			return nil
 		},
 		Handler: func(ws *websocket.Conn) {
-			var init StreamInitializeMessage
+			var init TTSStreamInitializeMessage
 			if err := websocket.JSON.Receive(ws, &init); err != nil {
 				t.Errorf("receive init: %v", err)
 				return
@@ -71,7 +70,7 @@ func TestStreamInputSessionSendsMessagesAndReceivesAudio(t *testing.T) {
 				t.Errorf("init generation config = %#v, want [50]", init.GenerationConfig)
 			}
 
-			var text StreamTextMessage
+			var text TTSStreamTextMessage
 			if err := websocket.JSON.Receive(ws, &text); err != nil {
 				t.Errorf("receive text: %v", err)
 				return
@@ -86,16 +85,16 @@ func TestStreamInputSessionSendsMessagesAndReceivesAudio(t *testing.T) {
 				t.Errorf("flush = %#v, want true", text.Flush)
 			}
 
-			_ = websocket.JSON.Send(ws, StreamInputEvent{
+			_ = websocket.JSON.Send(ws, TTSStreamInputEvent{
 				Audio: base64.StdEncoding.EncodeToString([]byte("audio")),
-				Alignment: &StreamAlignment{
+				Alignment: &TTSStreamAlignment{
 					Chars:            []string{"H"},
 					CharStartTimesMs: []int{0},
 					CharDurationsMs:  []int{20},
 				},
 			})
 
-			var closeMessage StreamTextMessage
+			var closeMessage TTSStreamTextMessage
 			if err := websocket.JSON.Receive(ws, &closeMessage); err != nil {
 				t.Errorf("receive close input: %v", err)
 				return
@@ -103,14 +102,14 @@ func TestStreamInputSessionSendsMessagesAndReceivesAudio(t *testing.T) {
 			if closeMessage.Text != "" {
 				t.Errorf("close text = %q, want empty", closeMessage.Text)
 			}
-			_ = websocket.JSON.Send(ws, StreamInputEvent{IsFinal: true})
+			_ = websocket.JSON.Send(ws, TTSStreamInputEvent{IsFinal: true})
 		},
 	})
 	defer server.Close()
 
-	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
 
-	session, err := client.ConnectStreamInput(ctx, StreamInputRequest{
+	session, err := client.TTS.ConnectStreamInput(ctx, TTSStreamInputRequest{
 		VoiceID:                "voice_123",
 		ModelID:                "eleven_flash_v2_5",
 		LanguageCode:           "en",
@@ -128,13 +127,13 @@ func TestStreamInputSessionSendsMessagesAndReceivesAudio(t *testing.T) {
 	}
 	defer session.Close()
 
-	if err := session.Initialize(StreamInitializeMessage{
+	if err := session.Initialize(TTSStreamInitializeMessage{
 		VoiceSettings:    &VoiceSettings{Stability: floatPtr(0.5)},
 		GenerationConfig: &GenerationConfig{ChunkLengthSchedule: []float64{50}},
 	}); err != nil {
 		t.Fatalf("Initialize returned error: %v", err)
 	}
-	if err := session.SendText(StreamTextMessage{
+	if err := session.SendText(TTSStreamTextMessage{
 		Text:                 "Hello ",
 		TryTriggerGeneration: boolPtr(true),
 		Flush:                boolPtr(true),
@@ -186,7 +185,7 @@ func TestMultiStreamInputSessionSendsContextMessages(t *testing.T) {
 			return nil
 		},
 		Handler: func(ws *websocket.Conn) {
-			var init MultiStreamContextMessage
+			var init TTSMultiStreamContextMessage
 			if err := websocket.JSON.Receive(ws, &init); err != nil {
 				t.Errorf("receive init: %v", err)
 				return
@@ -195,7 +194,7 @@ func TestMultiStreamInputSessionSendsContextMessages(t *testing.T) {
 				t.Errorf("init = %+v, want blank text for ctx_a", init)
 			}
 
-			var text MultiStreamTextMessage
+			var text TTSMultiStreamTextMessage
 			if err := websocket.JSON.Receive(ws, &text); err != nil {
 				t.Errorf("receive text: %v", err)
 				return
@@ -204,12 +203,12 @@ func TestMultiStreamInputSessionSendsContextMessages(t *testing.T) {
 				t.Errorf("text = %+v, want Hello for ctx_a", text)
 			}
 
-			_ = websocket.JSON.Send(ws, StreamInputEvent{
+			_ = websocket.JSON.Send(ws, TTSStreamInputEvent{
 				ContextID: "ctx_a",
 				Audio:     base64.StdEncoding.EncodeToString([]byte("ctx-audio")),
 			})
 
-			var flush MultiStreamFlushMessage
+			var flush TTSMultiStreamFlushMessage
 			if err := websocket.JSON.Receive(ws, &flush); err != nil {
 				t.Errorf("receive flush: %v", err)
 				return
@@ -239,9 +238,9 @@ func TestMultiStreamInputSessionSendsContextMessages(t *testing.T) {
 	})
 	defer server.Close()
 
-	client := NewClient("", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
+	client := NewClient("", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
 
-	session, err := client.ConnectMultiStreamInput(ctx, StreamInputRequest{
+	session, err := client.TTS.ConnectMultiStreamInput(ctx, TTSStreamInputRequest{
 		VoiceID:        "voice_123",
 		SingleUseToken: "token_123",
 	})
@@ -250,10 +249,10 @@ func TestMultiStreamInputSessionSendsContextMessages(t *testing.T) {
 	}
 	defer session.Close()
 
-	if err := session.Initialize(MultiStreamContextMessage{ContextID: "ctx_a"}); err != nil {
+	if err := session.Initialize(TTSMultiStreamContextMessage{ContextID: "ctx_a"}); err != nil {
 		t.Fatalf("Initialize returned error: %v", err)
 	}
-	if err := session.SendText(MultiStreamTextMessage{Text: "Hello ", ContextID: "ctx_a"}); err != nil {
+	if err := session.SendText(TTSMultiStreamTextMessage{Text: "Hello ", ContextID: "ctx_a"}); err != nil {
 		t.Fatalf("SendText returned error: %v", err)
 	}
 	event, err := session.Receive()
@@ -270,7 +269,7 @@ func TestMultiStreamInputSessionSendsContextMessages(t *testing.T) {
 	if string(audio) != "ctx-audio" {
 		t.Fatalf("audio = %q, want ctx-audio", string(audio))
 	}
-	if err := session.FlushContext(MultiStreamFlushMessage{ContextID: "ctx_a", Text: "tail "}); err != nil {
+	if err := session.FlushContext(TTSMultiStreamFlushMessage{ContextID: "ctx_a", Text: "tail "}); err != nil {
 		t.Fatalf("FlushContext returned error: %v", err)
 	}
 	if err := session.CloseContext("ctx_a"); err != nil {

@@ -1,9 +1,9 @@
-package speechtotext
+package elevenlabs
 
 import "io"
 
-// File is a file upload for multipart API requests.
-type File struct {
+// TranscriptFile is a file upload for multipart API requests.
+type TranscriptFile struct {
 	Name   string
 	Reader io.Reader
 
@@ -12,8 +12,8 @@ type File struct {
 	SizeBytes int64
 }
 
-// UploadProgress reports uploaded file bytes for a transcript request.
-type UploadProgress struct {
+// TranscriptUploadProgress reports uploaded file bytes for a transcript request.
+type TranscriptUploadProgress struct {
 	SentBytes int64
 	// TotalBytes is -1 when the upload size cannot be determined.
 	TotalBytes int64
@@ -27,7 +27,7 @@ type UploadProgress struct {
 type CreateTranscriptRequest struct {
 	ModelID string
 
-	File            *File
+	File            *TranscriptFile
 	SourceURL       string
 	CloudStorageURL string
 	EnableLogging   *bool
@@ -56,7 +56,7 @@ type CreateTranscriptRequest struct {
 	Keyterms                []string
 	ExtraFormFields         map[string][]string
 
-	OnUploadProgress func(UploadProgress)
+	OnUploadProgress func(TranscriptUploadProgress)
 }
 
 // Transcript is a speech-to-text transcript response.

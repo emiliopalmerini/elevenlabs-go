@@ -1,4 +1,4 @@
-package speechtotext
+package elevenlabs
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 	"golang.org/x/net/websocket"
 )
 
@@ -96,7 +95,7 @@ type RealtimeTranscriptWord struct {
 }
 
 // ConnectRealtimeTranscript opens a realtime speech-to-text WebSocket session.
-func (c *Client) ConnectRealtimeTranscript(ctx context.Context, in RealtimeTranscriptRequest) (*RealtimeTranscriptSession, error) {
+func (c *STTService) ConnectRealtimeTranscript(ctx context.Context, in RealtimeTranscriptRequest) (*RealtimeTranscriptSession, error) {
 	core, err := c.apiClient()
 	if err != nil {
 		return nil, err
@@ -127,7 +126,7 @@ func (c *Client) ConnectRealtimeTranscript(ctx context.Context, in RealtimeTrans
 	return &RealtimeTranscriptSession{conn: conn}, nil
 }
 
-func (c *Client) realtimeTranscriptEndpoint(core *elevenlabs.Client, in RealtimeTranscriptRequest) (string, string, error) {
+func (c *STTService) realtimeTranscriptEndpoint(core *Client, in RealtimeTranscriptRequest) (string, string, error) {
 	baseURL, err := core.Endpoint("/v1/speech-to-text/realtime")
 	if err != nil {
 		return "", "", err
@@ -180,7 +179,7 @@ func (c *Client) realtimeTranscriptEndpoint(core *elevenlabs.Client, in Realtime
 }
 
 func setStringQuery(query url.Values, name, value string) {
-	if value != "" {
+	if strings.TrimSpace(value) != "" {
 		query.Set(name, value)
 	}
 }

@@ -1,4 +1,4 @@
-package speechtotext
+package elevenlabs
 
 import (
 	"context"
@@ -7,9 +7,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
-
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 )
 
 func TestCreateTranscriptRetriesSourceURL(t *testing.T) {
@@ -37,12 +34,12 @@ func TestCreateTranscriptRetriesSourceURL(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		elevenlabs.WithBaseURL(server.URL),
-		elevenlabs.WithHTTPClient(server.Client()),
-		elevenlabs.WithRetryConfig(fastRetryConfig(2)),
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
+		WithRetryConfig(fastRetryConfig(2)),
 	)
 
-	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+	transcript, err := client.STT.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID:   "scribe_v1",
 		SourceURL: "https://example.com/audio.mp3",
 	})
@@ -74,14 +71,14 @@ func TestCreateTranscriptDoesNotRetryNonSeekableFile(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		elevenlabs.WithBaseURL(server.URL),
-		elevenlabs.WithHTTPClient(server.Client()),
-		elevenlabs.WithRetryConfig(fastRetryConfig(3)),
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
+		WithRetryConfig(fastRetryConfig(3)),
 	)
 
-	_, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+	_, err := client.STT.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID: "scribe_v1",
-		File: &File{
+		File: &TranscriptFile{
 			Name:   "sample.mp3",
 			Reader: &nonSeekableReader{r: strings.NewReader("audio-bytes")},
 		},
@@ -118,14 +115,14 @@ func TestCreateTranscriptRetriesSeekableFile(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		elevenlabs.WithBaseURL(server.URL),
-		elevenlabs.WithHTTPClient(server.Client()),
-		elevenlabs.WithRetryConfig(fastRetryConfig(2)),
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
+		WithRetryConfig(fastRetryConfig(2)),
 	)
 
-	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+	transcript, err := client.STT.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID: "scribe_v1",
-		File:    &File{Name: "sample.mp3", Reader: strings.NewReader("audio-bytes")},
+		File:    &TranscriptFile{Name: "sample.mp3", Reader: strings.NewReader("audio-bytes")},
 	})
 	if err != nil {
 		t.Fatalf("CreateTranscript returned error: %v", err)
@@ -142,7 +139,7 @@ func TestCreateTranscriptProgressReportsRetryAttempts(t *testing.T) {
 	ctx := context.Background()
 	audio := "audio-bytes"
 	var attempts atomic.Int32
-	var progress []UploadProgress
+	var progress []TranscriptUploadProgress
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempt := attempts.Add(1)
@@ -163,19 +160,19 @@ func TestCreateTranscriptProgressReportsRetryAttempts(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		elevenlabs.WithBaseURL(server.URL),
-		elevenlabs.WithHTTPClient(server.Client()),
-		elevenlabs.WithRetryConfig(fastRetryConfig(2)),
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
+		WithRetryConfig(fastRetryConfig(2)),
 	)
 
-	_, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
+	_, err := client.STT.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID: "scribe_v1",
-		File: &File{
+		File: &TranscriptFile{
 			Name:      "sample.mp3",
 			Reader:    strings.NewReader(audio),
 			SizeBytes: int64(len(audio)),
 		},
-		OnUploadProgress: func(update UploadProgress) {
+		OnUploadProgress: func(update TranscriptUploadProgress) {
 			progress = append(progress, update)
 		},
 	})
@@ -187,7 +184,7 @@ func TestCreateTranscriptProgressReportsRetryAttempts(t *testing.T) {
 	}
 
 	var doneAttempts []int
-	initialByAttempt := map[int]UploadProgress{}
+	initialByAttempt := map[int]TranscriptUploadProgress{}
 	for _, update := range progress {
 		if update.SentBytes == 0 {
 			initialByAttempt[update.Attempt] = update
@@ -213,12 +210,4 @@ type nonSeekableReader struct {
 
 func (r *nonSeekableReader) Read(p []byte) (int, error) {
 	return r.r.Read(p)
-}
-
-func fastRetryConfig(maxAttempts int) elevenlabs.RetryConfig {
-	return elevenlabs.RetryConfig{
-		MaxAttempts: maxAttempts,
-		BaseDelay:   time.Nanosecond,
-		MaxDelay:    time.Nanosecond,
-	}
 }

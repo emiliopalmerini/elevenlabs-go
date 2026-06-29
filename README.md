@@ -2,8 +2,8 @@
 
 A small Go client for the ElevenLabs API.
 
-This module currently focuses on speech-to-text, text-to-speech, and account
-metadata endpoints:
+This module currently focuses on speech-to-text, text-to-speech, model, and
+account metadata endpoints:
 
 - create, retrieve, and delete transcripts
 - submit asynchronous transcript webhook jobs
@@ -20,31 +20,13 @@ metadata endpoints:
 ## Installation
 
 ```sh
-go get github.com/emiliopalmerini/elevenlabs-go@v0.2.0
+go get github.com/emiliopalmerini/elevenlabs-go/elevenlabs
 ```
 
 Import the package as:
 
 ```go
-import elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
-```
-
-Speech-to-text APIs live in their own subpackage:
-
-```go
-import "github.com/emiliopalmerini/elevenlabs-go/speechtotext"
-```
-
-Text-to-speech APIs also live in their own subpackage:
-
-```go
-import "github.com/emiliopalmerini/elevenlabs-go/texttospeech"
-```
-
-User APIs live in their own subpackage:
-
-```go
-import "github.com/emiliopalmerini/elevenlabs-go/user"
+import "github.com/emiliopalmerini/elevenlabs-go/elevenlabs"
 ```
 
 ## Quick Start
@@ -58,12 +40,12 @@ import (
 	"log"
 	"os"
 
-	"github.com/emiliopalmerini/elevenlabs-go/speechtotext"
+	"github.com/emiliopalmerini/elevenlabs-go/elevenlabs"
 )
 
 func main() {
 	ctx := context.Background()
-	client := speechtotext.NewClient(os.Getenv("ELEVENLABS_API_KEY"))
+	client := elevenlabs.NewClient(os.Getenv("ELEVENLABS_API_KEY"))
 
 	file, err := os.Open("audio.mp3")
 	if err != nil {
@@ -71,9 +53,9 @@ func main() {
 	}
 	defer file.Close()
 
-	transcript, err := client.CreateTranscript(ctx, speechtotext.CreateTranscriptRequest{
+	transcript, err := client.STT.CreateTranscript(ctx, elevenlabs.CreateTranscriptRequest{
 		ModelID: "scribe_v1",
-		File: &speechtotext.File{
+		File: &elevenlabs.TranscriptFile{
 			Name:   "audio.mp3",
 			Reader: file,
 		},
@@ -89,7 +71,7 @@ func main() {
 You can also transcribe by URL:
 
 ```go
-transcript, err := client.CreateTranscript(ctx, speechtotext.CreateTranscriptRequest{
+transcript, err := client.STT.CreateTranscript(ctx, elevenlabs.CreateTranscriptRequest{
 	ModelID:   "scribe_v1",
 	SourceURL: "https://example.com/audio.mp3",
 })
@@ -98,40 +80,25 @@ transcript, err := client.CreateTranscript(ctx, speechtotext.CreateTranscriptReq
 ## Text to Speech
 
 ```go
-package main
+audio, err := client.TTS.CreateSpeech(ctx, elevenlabs.CreateSpeechRequest{
+	VoiceID:      "JBFqnCBsd6RMkjVDRZzb",
+	Text:         "The first move is what sets everything in motion.",
+	ModelID:      "eleven_multilingual_v2",
+	OutputFormat: "mp3_44100_128",
+})
+if err != nil {
+	return err
+}
 
-import (
-	"context"
-	"log"
-	"os"
-
-	"github.com/emiliopalmerini/elevenlabs-go/texttospeech"
-)
-
-func main() {
-	ctx := context.Background()
-	client := texttospeech.NewClient(os.Getenv("ELEVENLABS_API_KEY"))
-
-	audio, err := client.CreateSpeech(ctx, texttospeech.CreateSpeechRequest{
-		VoiceID:      "JBFqnCBsd6RMkjVDRZzb",
-		Text:         "The first move is what sets everything in motion.",
-		ModelID:      "eleven_multilingual_v2",
-		OutputFormat: "mp3_44100_128",
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err := os.WriteFile("speech.mp3", audio, 0o644); err != nil {
-		log.Fatal(err)
-	}
+if err := os.WriteFile("speech.mp3", audio, 0o644); err != nil {
+	return err
 }
 ```
 
 Timestamp-enabled generation returns base64 audio plus character alignment:
 
 ```go
-timed, err := client.CreateSpeechWithTimestamps(ctx, texttospeech.CreateSpeechRequest{
+timed, err := client.TTS.CreateSpeechWithTimestamps(ctx, elevenlabs.CreateSpeechRequest{
 	VoiceID: "JBFqnCBsd6RMkjVDRZzb",
 	Text:    "Hello from ElevenLabs.",
 })
@@ -150,7 +117,7 @@ fmt.Println(len(audio), timed.Alignment.Characters)
 HTTP streaming methods return closeable streams:
 
 ```go
-stream, err := client.StreamSpeech(ctx, texttospeech.CreateSpeechRequest{
+stream, err := client.TTS.StreamSpeech(ctx, elevenlabs.CreateSpeechRequest{
 	VoiceID: "JBFqnCBsd6RMkjVDRZzb",
 	Text:    "Stream this text.",
 })
@@ -165,7 +132,7 @@ _, err = io.Copy(output, stream)
 WebSocket streaming uses explicit session messages:
 
 ```go
-session, err := client.ConnectStreamInput(ctx, texttospeech.StreamInputRequest{
+session, err := client.TTS.ConnectStreamInput(ctx, elevenlabs.TTSStreamInputRequest{
 	VoiceID:      "JBFqnCBsd6RMkjVDRZzb",
 	ModelID:      "eleven_flash_v2_5",
 	OutputFormat: "mp3_44100_128",
@@ -175,10 +142,10 @@ if err != nil {
 }
 defer session.Close()
 
-if err := session.Initialize(texttospeech.StreamInitializeMessage{}); err != nil {
+if err := session.Initialize(elevenlabs.TTSStreamInitializeMessage{}); err != nil {
 	return err
 }
-if err := session.SendText(texttospeech.StreamTextMessage{Text: "Hello "}); err != nil {
+if err := session.SendText(elevenlabs.TTSStreamTextMessage{Text: "Hello "}); err != nil {
 	return err
 }
 if err := session.Flush(""); err != nil {
@@ -193,36 +160,25 @@ if err != nil {
 audio, err := event.AudioBytes()
 ```
 
-## User
+## User And Models
 
 ```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-
-	"github.com/emiliopalmerini/elevenlabs-go/user"
-)
-
-func main() {
-	ctx := context.Background()
-	client := user.NewClient(os.Getenv("ELEVENLABS_API_KEY"))
-
-	account, err := client.Get(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	subscription, err := client.GetSubscription(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(account.UserID, subscription.Tier)
+account, err := client.User.Get(ctx)
+if err != nil {
+	return err
 }
+
+subscription, err := client.User.GetSubscription(ctx)
+if err != nil {
+	return err
+}
+
+models, err := client.Models.List(ctx)
+if err != nil {
+	return err
+}
+
+fmt.Println(account.UserID, subscription.Tier, len(models))
 ```
 
 ## Advanced Transcript Options
@@ -235,7 +191,7 @@ progress callbacks.
 ```go
 diarize := true
 
-transcript, err := client.CreateTranscript(ctx, speechtotext.CreateTranscriptRequest{
+transcript, err := client.STT.CreateTranscript(ctx, elevenlabs.CreateTranscriptRequest{
 	ModelID:      "scribe_v1",
 	SourceURL:    "https://example.com/interview.mp3",
 	LanguageCode: "en",
@@ -254,7 +210,7 @@ Use `SubmitTranscriptWebhook` when the transcript should be processed
 asynchronously by ElevenLabs:
 
 ```go
-resp, err := client.SubmitTranscriptWebhook(ctx, speechtotext.CreateTranscriptRequest{
+resp, err := client.STT.SubmitTranscriptWebhook(ctx, elevenlabs.CreateTranscriptRequest{
 	ModelID:   "scribe_v1",
 	SourceURL: "https://example.com/audio.mp3",
 	WebhookID: "your-webhook-id",
@@ -271,10 +227,10 @@ fmt.Println(resp.TranscriptionID)
 
 ## Realtime Transcription
 
-Realtime transcription uses the package WebSocket session type:
+Realtime transcription uses a WebSocket session type:
 
 ```go
-session, err := client.ConnectRealtimeTranscript(ctx, speechtotext.RealtimeTranscriptRequest{
+session, err := client.STT.ConnectRealtimeTranscript(ctx, elevenlabs.RealtimeTranscriptRequest{
 	ModelID:     "scribe_v1",
 	AudioFormat: "pcm_16000",
 })
@@ -283,7 +239,7 @@ if err != nil {
 }
 defer session.Close()
 
-if err := session.SendAudioChunk(speechtotext.RealtimeAudioChunk{
+if err := session.SendAudioChunk(elevenlabs.RealtimeAudioChunk{
 	Audio:      pcmBytes,
 	Commit:     true,
 	SampleRate: 16000,
@@ -307,7 +263,7 @@ passed on `RealtimeTranscriptRequest.Token`.
 Methods ending in `WithResponse` return parsed data plus raw HTTP metadata:
 
 ```go
-resp, err := client.GetTranscriptWithResponse(ctx, "transcript-id")
+resp, err := client.STT.GetTranscriptWithResponse(ctx, "transcript-id")
 if err != nil {
 	return err
 }
@@ -323,7 +279,7 @@ Non-2xx API responses return `*elevenlabs.APIError` when the response can be
 read:
 
 ```go
-transcript, err := client.GetTranscript(ctx, "transcript-id")
+transcript, err := client.STT.GetTranscript(ctx, "transcript-id")
 if err != nil {
 	var apiErr *elevenlabs.APIError
 	if errors.As(err, &apiErr) {
@@ -354,14 +310,14 @@ Replayable requests retry transient status codes by default:
 Customize or disable retries with client options:
 
 ```go
-client := speechtotext.NewClient(
+client := elevenlabs.NewClient(
 	os.Getenv("ELEVENLABS_API_KEY"),
 	elevenlabs.WithRetryConfig(elevenlabs.RetryConfig{
 		MaxAttempts: 5,
 	}),
 )
 
-noRetryClient := speechtotext.NewClient(
+noRetryClient := elevenlabs.NewClient(
 	os.Getenv("ELEVENLABS_API_KEY"),
 	elevenlabs.WithoutRetries(),
 )
@@ -372,7 +328,7 @@ File uploads are retried only when the upload body can be replayed.
 ## Client Options
 
 ```go
-client := speechtotext.NewClient(
+client := elevenlabs.NewClient(
 	os.Getenv("ELEVENLABS_API_KEY"),
 	elevenlabs.WithHTTPClient(customHTTPClient),
 	elevenlabs.WithBaseURL("https://api.elevenlabs.io"),
@@ -393,12 +349,12 @@ go vet ./...
 Tagged releases are standard Go module versions:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
-Consumers can then depend on the module with:
+Consumers can then depend on the package with:
 
 ```sh
-go get github.com/emiliopalmerini/elevenlabs-go@v0.2.0
+go get github.com/emiliopalmerini/elevenlabs-go/elevenlabs@v0.3.0
 ```

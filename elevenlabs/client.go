@@ -19,6 +19,11 @@ const (
 
 // Client is an ElevenLabs API client.
 type Client struct {
+	STT    *STTService
+	TTS    *TTSService
+	User   *UserService
+	Models *ModelsService
+
 	apiKey      string
 	baseURL     string
 	httpClient  *http.Client
@@ -49,6 +54,11 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 	if c.httpClient == nil {
 		c.httpClient = http.DefaultClient
 	}
+
+	c.STT = &STTService{client: c}
+	c.TTS = &TTSService{client: c}
+	c.User = &UserService{client: c}
+	c.Models = &ModelsService{client: c}
 
 	return c
 }

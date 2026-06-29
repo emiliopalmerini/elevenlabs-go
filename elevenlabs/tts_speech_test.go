@@ -1,4 +1,4 @@
-package texttospeech
+package elevenlabs
 
 import (
 	"context"
@@ -12,8 +12,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 )
 
 func TestCreateSpeechSendsJSONAndReturnsAudio(t *testing.T) {
@@ -96,9 +94,9 @@ func TestCreateSpeechSendsJSONAndReturnsAudio(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
 
-	resp, err := client.CreateSpeechWithResponse(ctx, CreateSpeechRequest{
+	resp, err := client.TTS.CreateSpeechWithResponse(ctx, CreateSpeechRequest{
 		VoiceID:      "voice/id",
 		Text:         "Hello from Go.",
 		ModelID:      "eleven_multilingual_v2",
@@ -159,9 +157,9 @@ func TestCreateSpeechWithTimestampsParsesAlignmentAndAudio(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
 
-	out, err := client.CreateSpeechWithTimestamps(ctx, CreateSpeechRequest{
+	out, err := client.TTS.CreateSpeechWithTimestamps(ctx, CreateSpeechRequest{
 		VoiceID: "voice_123",
 		Text:    "Hi",
 	})
@@ -193,9 +191,9 @@ func TestStreamSpeechReturnsReadableBodyAndRawMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
 
-	resp, err := client.StreamSpeechWithResponse(ctx, CreateSpeechRequest{
+	resp, err := client.TTS.StreamSpeechWithResponse(ctx, CreateSpeechRequest{
 		VoiceID: "voice_123",
 		Text:    "stream me",
 	})
@@ -231,9 +229,9 @@ func TestStreamSpeechWithTimestampsReceivesChunks(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
 
-	stream, err := client.StreamSpeechWithTimestamps(ctx, CreateSpeechRequest{
+	stream, err := client.TTS.StreamSpeechWithTimestamps(ctx, CreateSpeechRequest{
 		VoiceID: "voice_123",
 		Text:    "stream with timing",
 	})
@@ -290,16 +288,16 @@ func TestStreamSpeechRetriesBeforeReturningBody(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		elevenlabs.WithBaseURL(server.URL),
-		elevenlabs.WithHTTPClient(server.Client()),
-		elevenlabs.WithRetryConfig(elevenlabs.RetryConfig{
+		WithBaseURL(server.URL),
+		WithHTTPClient(server.Client()),
+		WithRetryConfig(RetryConfig{
 			MaxAttempts: 2,
 			BaseDelay:   time.Millisecond,
 			MaxDelay:    time.Millisecond,
 		}),
 	)
 
-	stream, err := client.StreamSpeech(ctx, CreateSpeechRequest{
+	stream, err := client.TTS.StreamSpeech(ctx, CreateSpeechRequest{
 		VoiceID: "voice_123",
 		Text:    "retry stream",
 	})
@@ -352,7 +350,7 @@ func TestCreateSpeechValidatesRequiredFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := client.CreateSpeech(ctx, tt.in)
+			_, err := client.TTS.CreateSpeech(ctx, tt.in)
 			if err == nil {
 				t.Fatal("CreateSpeech error = nil, want validation error")
 			}
@@ -374,16 +372,4 @@ func assertStringSlice(t *testing.T, got, want []string) {
 			t.Fatalf("slice[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
-}
-
-func boolPtr(v bool) *bool {
-	return &v
-}
-
-func floatPtr(v float64) *float64 {
-	return &v
-}
-
-func intPtr(v int) *int {
-	return &v
 }

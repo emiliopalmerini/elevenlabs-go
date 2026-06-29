@@ -1,4 +1,4 @@
-package texttospeech
+package elevenlabs
 
 import (
 	"encoding/base64"
@@ -95,26 +95,26 @@ func (s *AudioStream) Close() error {
 	return s.Body.Close()
 }
 
-// StreamAlignment contains WebSocket chunk alignment information in
+// TTSStreamAlignment contains WebSocket chunk alignment information in
 // milliseconds.
-type StreamAlignment struct {
+type TTSStreamAlignment struct {
 	CharStartTimesMs []int    `json:"charStartTimesMs,omitempty"`
 	CharDurationsMs  []int    `json:"charDurationsMs,omitempty"`
 	Chars            []string `json:"chars,omitempty"`
 }
 
-// StreamInputEvent is a JSON event received from single or multi-context
+// TTSStreamInputEvent is a JSON event received from single or multi-context
 // text-to-speech WebSocket streams.
-type StreamInputEvent struct {
-	Audio               string           `json:"audio,omitempty"`
-	Alignment           *StreamAlignment `json:"alignment,omitempty"`
-	NormalizedAlignment *StreamAlignment `json:"normalizedAlignment,omitempty"`
-	IsFinal             bool             `json:"isFinal,omitempty"`
-	ContextID           string           `json:"contextId,omitempty"`
-	Error               string           `json:"error,omitempty"`
+type TTSStreamInputEvent struct {
+	Audio               string              `json:"audio,omitempty"`
+	Alignment           *TTSStreamAlignment `json:"alignment,omitempty"`
+	NormalizedAlignment *TTSStreamAlignment `json:"normalizedAlignment,omitempty"`
+	IsFinal             bool                `json:"isFinal,omitempty"`
+	ContextID           string              `json:"contextId,omitempty"`
+	Error               string              `json:"error,omitempty"`
 }
 
 // AudioBytes decodes a base64-encoded WebSocket audio chunk.
-func (e StreamInputEvent) AudioBytes() ([]byte, error) {
+func (e TTSStreamInputEvent) AudioBytes() ([]byte, error) {
 	return base64.StdEncoding.DecodeString(e.Audio)
 }

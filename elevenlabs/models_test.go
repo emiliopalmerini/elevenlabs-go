@@ -56,7 +56,7 @@ func TestListModelsParsesDocumentedFields(t *testing.T) {
 
 	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
 
-	models, err := client.ListModels(ctx)
+	models, err := client.Models.List(ctx)
 	if err != nil {
 		t.Fatalf("ListModels returned error: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestListModelsWithResponseReturnsRawMetadata(t *testing.T) {
 
 	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
 
-	resp, err := client.ListModelsWithResponse(ctx)
+	resp, err := client.Models.ListWithResponse(ctx)
 	if err != nil {
 		t.Fatalf("ListModelsWithResponse returned error: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestListModelsRetriesTransientStatus(t *testing.T) {
 		WithRetryConfig(fastRetryConfig(2)),
 	)
 
-	models, err := client.ListModels(ctx)
+	models, err := client.Models.List(ctx)
 	if err != nil {
 		t.Fatalf("ListModels returned error: %v", err)
 	}

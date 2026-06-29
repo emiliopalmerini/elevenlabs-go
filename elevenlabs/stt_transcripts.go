@@ -1,4 +1,4 @@
-package speechtotext
+package elevenlabs
 
 import (
 	"context"
@@ -8,12 +8,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 )
 
 // CreateTranscript transcribes an audio or video file.
-func (c *Client) CreateTranscript(ctx context.Context, in CreateTranscriptRequest) (*Transcript, error) {
+func (c *STTService) CreateTranscript(ctx context.Context, in CreateTranscriptRequest) (*Transcript, error) {
 	resp, err := c.CreateTranscriptWithResponse(ctx, in)
 	if err != nil {
 		return nil, err
@@ -23,7 +21,7 @@ func (c *Client) CreateTranscript(ctx context.Context, in CreateTranscriptReques
 
 // CreateTranscriptWithResponse transcribes an audio or video file and returns
 // HTTP response metadata.
-func (c *Client) CreateTranscriptWithResponse(ctx context.Context, in CreateTranscriptRequest) (*elevenlabs.Response[*Transcript], error) {
+func (c *STTService) CreateTranscriptWithResponse(ctx context.Context, in CreateTranscriptRequest) (*Response[*Transcript], error) {
 	if err := validateCreateTranscriptRequest(in); err != nil {
 		return nil, err
 	}
@@ -34,7 +32,7 @@ func (c *Client) CreateTranscriptWithResponse(ctx context.Context, in CreateTran
 		return nil, err
 	}
 
-	return &elevenlabs.Response[*Transcript]{
+	return &Response[*Transcript]{
 		Data:        &out,
 		RawResponse: raw,
 	}, nil
@@ -42,7 +40,7 @@ func (c *Client) CreateTranscriptWithResponse(ctx context.Context, in CreateTran
 
 // SubmitTranscriptWebhook submits a transcript request for asynchronous webhook
 // processing.
-func (c *Client) SubmitTranscriptWebhook(ctx context.Context, in CreateTranscriptRequest) (*TranscriptWebhookResponse, error) {
+func (c *STTService) SubmitTranscriptWebhook(ctx context.Context, in CreateTranscriptRequest) (*TranscriptWebhookResponse, error) {
 	resp, err := c.SubmitTranscriptWebhookWithResponse(ctx, in)
 	if err != nil {
 		return nil, err
@@ -52,7 +50,7 @@ func (c *Client) SubmitTranscriptWebhook(ctx context.Context, in CreateTranscrip
 
 // SubmitTranscriptWebhookWithResponse submits a transcript request for
 // asynchronous webhook processing and returns HTTP response metadata.
-func (c *Client) SubmitTranscriptWebhookWithResponse(ctx context.Context, in CreateTranscriptRequest) (*elevenlabs.Response[*TranscriptWebhookResponse], error) {
+func (c *STTService) SubmitTranscriptWebhookWithResponse(ctx context.Context, in CreateTranscriptRequest) (*Response[*TranscriptWebhookResponse], error) {
 	webhook := true
 	in.Webhook = &webhook
 
@@ -66,16 +64,16 @@ func (c *Client) SubmitTranscriptWebhookWithResponse(ctx context.Context, in Cre
 		return nil, err
 	}
 
-	return &elevenlabs.Response[*TranscriptWebhookResponse]{
+	return &Response[*TranscriptWebhookResponse]{
 		Data:        &out,
 		RawResponse: raw,
 	}, nil
 }
 
-func (c *Client) doCreateTranscript(ctx context.Context, in CreateTranscriptRequest, out any) (elevenlabs.RawResponse, error) {
+func (c *STTService) doCreateTranscript(ctx context.Context, in CreateTranscriptRequest, out any) (RawResponse, error) {
 	core, err := c.apiClient()
 	if err != nil {
-		return elevenlabs.RawResponse{}, err
+		return RawResponse{}, err
 	}
 
 	body := createTranscriptBody(in)
@@ -103,14 +101,14 @@ func (c *Client) doCreateTranscript(ctx context.Context, in CreateTranscriptRequ
 	if err != nil {
 		return raw, err
 	}
-	if err := elevenlabs.DecodeResponse(respBody, out); err != nil {
+	if err := DecodeResponse(respBody, out); err != nil {
 		return raw, err
 	}
 	return raw, nil
 }
 
 // GetTranscript retrieves a previously generated transcript by ID.
-func (c *Client) GetTranscript(ctx context.Context, id string) (*Transcript, error) {
+func (c *STTService) GetTranscript(ctx context.Context, id string) (*Transcript, error) {
 	resp, err := c.GetTranscriptWithResponse(ctx, id)
 	if err != nil {
 		return nil, err
@@ -120,7 +118,7 @@ func (c *Client) GetTranscript(ctx context.Context, id string) (*Transcript, err
 
 // GetTranscriptWithResponse retrieves a previously generated transcript by ID
 // and returns HTTP response metadata.
-func (c *Client) GetTranscriptWithResponse(ctx context.Context, id string) (*elevenlabs.Response[*Transcript], error) {
+func (c *STTService) GetTranscriptWithResponse(ctx context.Context, id string) (*Response[*Transcript], error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, errors.New("elevenlabs: transcript id is required")
@@ -136,14 +134,14 @@ func (c *Client) GetTranscriptWithResponse(ctx context.Context, id string) (*ele
 		return nil, err
 	}
 
-	return &elevenlabs.Response[*Transcript]{
+	return &Response[*Transcript]{
 		Data:        &out,
 		RawResponse: raw,
 	}, nil
 }
 
 // DeleteTranscript deletes a previously generated transcript by ID.
-func (c *Client) DeleteTranscript(ctx context.Context, id string) error {
+func (c *STTService) DeleteTranscript(ctx context.Context, id string) error {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return errors.New("elevenlabs: transcript id is required")
@@ -163,7 +161,7 @@ func (c *Client) DeleteTranscript(ctx context.Context, id string) error {
 
 // DeleteTranscriptWithResponse deletes a previously generated transcript by ID
 // and returns HTTP response metadata.
-func (c *Client) DeleteTranscriptWithResponse(ctx context.Context, id string) (*elevenlabs.Response[any], error) {
+func (c *STTService) DeleteTranscriptWithResponse(ctx context.Context, id string) (*Response[any], error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, errors.New("elevenlabs: transcript id is required")
@@ -181,12 +179,12 @@ func (c *Client) DeleteTranscriptWithResponse(ctx context.Context, id string) (*
 	if err != nil {
 		return nil, err
 	}
-	data, err := elevenlabs.DecodeOptionalResponse(body)
+	data, err := DecodeOptionalResponse(body)
 	if err != nil {
 		return nil, err
 	}
 
-	return &elevenlabs.Response[any]{
+	return &Response[any]{
 		Data:        data,
 		RawResponse: raw,
 	}, nil
