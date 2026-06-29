@@ -1,15 +1,15 @@
-package elevenlabs
+package speechtotext
 
 import (
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
+	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 	"golang.org/x/net/websocket"
 )
 
@@ -97,14 +97,11 @@ type RealtimeTranscriptWord struct {
 
 // ConnectRealtimeTranscript opens a realtime speech-to-text WebSocket session.
 func (c *Client) ConnectRealtimeTranscript(ctx context.Context, in RealtimeTranscriptRequest) (*RealtimeTranscriptSession, error) {
-	if c == nil {
-		return nil, errors.New("elevenlabs: nil client")
+	core, err := c.apiClient()
+	if err != nil {
+		return nil, err
 	}
-	if strings.TrimSpace(in.Token) == "" && strings.TrimSpace(c.apiKey) == "" {
-		return nil, errors.New("elevenlabs: api key or realtime token is required")
-	}
-
-	endpoint, origin, err := c.realtimeTranscriptEndpoint(in)
+	endpoint, origin, err := c.realtimeTranscriptEndpoint(core, in)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +110,14 @@ func (c *Client) ConnectRealtimeTranscript(ctx context.Context, in RealtimeTrans
 		return nil, fmt.Errorf("elevenlabs: create realtime websocket config: %w", err)
 	}
 	if strings.TrimSpace(in.Token) == "" {
-		config.Header = http.Header{"xi-api-key": []string{c.apiKey}}
+		header, err := core.AuthHeader()
+		if err != nil {
+			if strings.Contains(err.Error(), "api key is required") {
+				return nil, errors.New("elevenlabs: api key or realtime token is required")
+			}
+			return nil, err
+		}
+		config.Header = header
 	}
 
 	conn, err := config.DialContext(ctx)
@@ -123,13 +127,14 @@ func (c *Client) ConnectRealtimeTranscript(ctx context.Context, in RealtimeTrans
 	return &RealtimeTranscriptSession{conn: conn}, nil
 }
 
-func (c *Client) realtimeTranscriptEndpoint(in RealtimeTranscriptRequest) (string, string, error) {
-	base, err := url.Parse(c.baseURL)
+func (c *Client) realtimeTranscriptEndpoint(core *elevenlabs.Client, in RealtimeTranscriptRequest) (string, string, error) {
+	baseURL, err := core.Endpoint("/v1/speech-to-text/realtime")
 	if err != nil {
-		return "", "", fmt.Errorf("elevenlabs: parse base url: %w", err)
+		return "", "", err
 	}
-	if !base.IsAbs() {
-		return "", "", fmt.Errorf("elevenlabs: base url must be absolute: %q", c.baseURL)
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return "", "", fmt.Errorf("elevenlabs: parse realtime endpoint: %w", err)
 	}
 
 	origin := *base
@@ -151,8 +156,7 @@ func (c *Client) realtimeTranscriptEndpoint(in RealtimeTranscriptRequest) (strin
 		wsBase.Scheme = "wss"
 	}
 
-	relative := &url.URL{Path: "v1/speech-to-text/realtime"}
-	endpoint := wsBase.ResolveReference(relative)
+	endpoint := &wsBase
 	query := endpoint.Query()
 	setStringQuery(query, "model_id", in.ModelID)
 	setStringQuery(query, "token", in.Token)

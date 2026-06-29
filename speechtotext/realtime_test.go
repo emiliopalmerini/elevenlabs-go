@@ -1,4 +1,4 @@
-package elevenlabs
+package speechtotext
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 	"golang.org/x/net/websocket"
 )
 
@@ -101,7 +102,7 @@ func TestRealtimeTranscriptSessionSendsConfigAndAudio(t *testing.T) {
 	})
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	session, err := client.ConnectRealtimeTranscript(ctx, RealtimeTranscriptRequest{
 		ModelID:                  "scribe_v2",
@@ -171,7 +172,7 @@ func TestRealtimeTranscriptSessionAllowsTokenAuth(t *testing.T) {
 	})
 	defer server.Close()
 
-	client := NewClient("", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	session, err := client.ConnectRealtimeTranscript(ctx, RealtimeTranscriptRequest{
 		ModelID: "scribe_v2",

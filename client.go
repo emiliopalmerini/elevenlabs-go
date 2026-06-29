@@ -29,6 +29,9 @@ type Client struct {
 // ClientOption configures a Client.
 type ClientOption func(*Client)
 
+// RequestBuilder builds an HTTP request for one attempt.
+type RequestBuilder func(context.Context) (*http.Request, error)
+
 // NewClient creates a Client that authenticates with apiKey.
 func NewClient(apiKey string, opts ...ClientOption) *Client {
 	c := &Client{
@@ -66,6 +69,11 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 	}
 }
 
+// NewRequest creates an authenticated API request against the configured base URL.
+func (c *Client) NewRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+	return c.newRequest(ctx, method, path, body)
+}
+
 func (c *Client) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
 	if c == nil {
 		return nil, errors.New("elevenlabs: nil client")
@@ -90,6 +98,11 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	return req, nil
 }
 
+// Endpoint resolves an API path against the configured base URL.
+func (c *Client) Endpoint(path string) (string, error) {
+	return c.endpoint(path)
+}
+
 func (c *Client) endpoint(path string) (string, error) {
 	base, err := url.Parse(c.baseURL)
 	if err != nil {
@@ -107,9 +120,26 @@ func (c *Client) endpoint(path string) (string, error) {
 	return base.ResolveReference(relative).String(), nil
 }
 
-type requestBuilder func(context.Context) (*http.Request, error)
+// AuthHeader returns the API key auth header for non-standard transports.
+func (c *Client) AuthHeader() (http.Header, error) {
+	if c == nil {
+		return nil, errors.New("elevenlabs: nil client")
+	}
+	if strings.TrimSpace(c.apiKey) == "" {
+		return nil, errors.New("elevenlabs: api key is required")
+	}
+
+	header := http.Header{}
+	header.Set("xi-api-key", c.apiKey)
+	return header, nil
+}
 
 func (c *Client) getJSON(ctx context.Context, path string, out any) (RawResponse, error) {
+	return c.GetJSON(ctx, path, out)
+}
+
+// GetJSON sends a retryable GET request and decodes the JSON response.
+func (c *Client) GetJSON(ctx context.Context, path string, out any) (RawResponse, error) {
 	build := func(ctx context.Context) (*http.Request, error) {
 		return c.newRequest(ctx, http.MethodGet, path, nil)
 	}
@@ -124,7 +154,12 @@ func (c *Client) getJSON(ctx context.Context, path string, out any) (RawResponse
 	return raw, nil
 }
 
-func (c *Client) do(ctx context.Context, build requestBuilder, retryable bool) ([]byte, RawResponse, error) {
+func (c *Client) do(ctx context.Context, build RequestBuilder, retryable bool) ([]byte, RawResponse, error) {
+	return c.Do(ctx, build, retryable)
+}
+
+// Do executes requests with the client's retry policy.
+func (c *Client) Do(ctx context.Context, build RequestBuilder, retryable bool) ([]byte, RawResponse, error) {
 	if c == nil {
 		return nil, RawResponse{}, errors.New("elevenlabs: nil client")
 	}
@@ -208,6 +243,11 @@ func readResponse(resp *http.Response) ([]byte, RawResponse, error) {
 }
 
 func decodeResponse(body []byte, out any) error {
+	return DecodeResponse(body, out)
+}
+
+// DecodeResponse decodes a JSON response body into out.
+func DecodeResponse(body []byte, out any) error {
 	if out == nil {
 		return nil
 	}
@@ -220,6 +260,11 @@ func decodeResponse(body []byte, out any) error {
 }
 
 func decodeOptionalResponse(body []byte) (any, error) {
+	return DecodeOptionalResponse(body)
+}
+
+// DecodeOptionalResponse decodes a JSON response body when one is present.
+func DecodeOptionalResponse(body []byte) (any, error) {
 	if len(bytes.TrimSpace(body)) == 0 {
 		return nil, nil
 	}

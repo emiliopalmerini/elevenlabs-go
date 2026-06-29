@@ -1,4 +1,4 @@
-package elevenlabs
+package speechtotext
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
 )
 
 func TestCreateTranscriptUploadsFile(t *testing.T) {
@@ -103,8 +105,8 @@ func TestCreateTranscriptUploadsFile(t *testing.T) {
 
 	client := NewClient(
 		"test-key",
-		WithBaseURL(server.URL),
-		WithHTTPClient(server.Client()),
+		elevenlabs.WithBaseURL(server.URL),
+		elevenlabs.WithHTTPClient(server.Client()),
 	)
 
 	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
@@ -149,7 +151,7 @@ func TestCreateTranscriptWithResponseReturnsRawMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	resp, err := client.CreateTranscriptWithResponse(ctx, CreateTranscriptRequest{
 		ModelID:   "scribe_v1",
@@ -191,7 +193,7 @@ func TestCreateTranscriptReportsUploadProgress(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	_, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID: "scribe_v1",
@@ -262,7 +264,7 @@ func TestCreateTranscriptAcceptsSourceURL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID:   "scribe_v1",
@@ -290,7 +292,7 @@ func TestCreateTranscriptDoesNotReportUploadProgressForSourceURL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	_, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID:   "scribe_v1",
@@ -342,7 +344,7 @@ func TestCreateTranscriptParsesDocumentedResponseFields(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID:   "scribe_v2",
@@ -411,7 +413,7 @@ func TestCreateTranscriptParsesMultichannelResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID:         "scribe_v2",
@@ -505,7 +507,7 @@ func TestSubmitTranscriptWebhookReturnsAcceptance(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	response, err := client.SubmitTranscriptWebhook(ctx, CreateTranscriptRequest{
 		ModelID:   "scribe_v2",
@@ -540,7 +542,7 @@ func TestSubmitTranscriptWebhookWithResponseReturnsRawMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	resp, err := client.SubmitTranscriptWebhookWithResponse(ctx, CreateTranscriptRequest{
 		ModelID:   "scribe_v2",
@@ -591,7 +593,7 @@ func TestCreateTranscriptSendsAdvancedRequestFields(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID:        "scribe_v1",
@@ -640,7 +642,7 @@ func TestCreateTranscriptSendsRemainingRequestFields(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID:               "scribe_v2",
@@ -682,7 +684,7 @@ func TestCreateTranscriptSendsEnableLoggingQuery(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID:       "scribe_v2",
@@ -734,7 +736,7 @@ func TestCreateTranscriptSendsAndParsesAdditionalFormats(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	transcript, err := client.CreateTranscript(ctx, CreateTranscriptRequest{
 		ModelID:   "scribe_v2",
@@ -804,7 +806,7 @@ func TestGetTranscript(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	transcript, err := client.GetTranscript(ctx, "tx_123")
 	if err != nil {
@@ -831,7 +833,7 @@ func TestGetTranscriptWithResponseReturnsRawMetadata(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	resp, err := client.GetTranscriptWithResponse(ctx, "tx_123")
 	if err != nil {
@@ -862,7 +864,7 @@ func TestGetTranscriptEscapesID(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	if _, err := client.GetTranscript(ctx, "tx/123"); err != nil {
 		t.Fatalf("GetTranscript returned error: %v", err)
@@ -895,7 +897,7 @@ func TestDeleteTranscript(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	if err := client.DeleteTranscript(ctx, "tx_123"); err != nil {
 		t.Fatalf("DeleteTranscript returned error: %v", err)
@@ -910,7 +912,7 @@ func TestDeleteTranscriptIgnoresSuccessBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	if err := client.DeleteTranscript(ctx, "tx_123"); err != nil {
 		t.Fatalf("DeleteTranscript returned error: %v", err)
@@ -926,7 +928,7 @@ func TestDeleteTranscriptWithResponseAllowsEmptyBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	resp, err := client.DeleteTranscriptWithResponse(ctx, "tx_123")
 	if err != nil {
@@ -952,7 +954,7 @@ func TestDeleteTranscriptWithResponseParsesJSONBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	resp, err := client.DeleteTranscriptWithResponse(ctx, "tx_123")
 	if err != nil {
@@ -981,7 +983,7 @@ func TestDeleteTranscriptEscapesID(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	if err := client.DeleteTranscript(ctx, "tx/123"); err != nil {
 		t.Fatalf("DeleteTranscript returned error: %v", err)
@@ -1004,16 +1006,16 @@ func TestDeleteTranscriptReturnsAPIError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", elevenlabs.WithBaseURL(server.URL), elevenlabs.WithHTTPClient(server.Client()))
 
 	err := client.DeleteTranscript(ctx, "tx_123")
 	if err == nil {
 		t.Fatal("DeleteTranscript error = nil, want API error")
 	}
 
-	var apiErr *APIError
+	var apiErr *elevenlabs.APIError
 	if !errors.As(err, &apiErr) {
-		t.Fatalf("error type = %T, want *APIError", err)
+		t.Fatalf("error type = %T, want *elevenlabs.APIError", err)
 	}
 	if apiErr.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusTooManyRequests)

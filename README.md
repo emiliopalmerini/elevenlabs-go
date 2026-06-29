@@ -16,13 +16,19 @@ metadata endpoints:
 ## Installation
 
 ```sh
-go get github.com/emiliopalmerini/elevenlabs-go@v0.1.0
+go get github.com/emiliopalmerini/elevenlabs-go@v0.2.0
 ```
 
 Import the package as:
 
 ```go
 import elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
+```
+
+Speech-to-text APIs live in their own subpackage:
+
+```go
+import "github.com/emiliopalmerini/elevenlabs-go/speechtotext"
 ```
 
 ## Quick Start
@@ -36,12 +42,12 @@ import (
 	"log"
 	"os"
 
-	elevenlabs "github.com/emiliopalmerini/elevenlabs-go"
+	"github.com/emiliopalmerini/elevenlabs-go/speechtotext"
 )
 
 func main() {
 	ctx := context.Background()
-	client := elevenlabs.NewClient(os.Getenv("ELEVENLABS_API_KEY"))
+	client := speechtotext.NewClient(os.Getenv("ELEVENLABS_API_KEY"))
 
 	file, err := os.Open("audio.mp3")
 	if err != nil {
@@ -49,9 +55,9 @@ func main() {
 	}
 	defer file.Close()
 
-	transcript, err := client.CreateTranscript(ctx, elevenlabs.CreateTranscriptRequest{
+	transcript, err := client.CreateTranscript(ctx, speechtotext.CreateTranscriptRequest{
 		ModelID: "scribe_v1",
-		File: &elevenlabs.File{
+		File: &speechtotext.File{
 			Name:   "audio.mp3",
 			Reader: file,
 		},
@@ -67,7 +73,7 @@ func main() {
 You can also transcribe by URL:
 
 ```go
-transcript, err := client.CreateTranscript(ctx, elevenlabs.CreateTranscriptRequest{
+transcript, err := client.CreateTranscript(ctx, speechtotext.CreateTranscriptRequest{
 	ModelID:   "scribe_v1",
 	SourceURL: "https://example.com/audio.mp3",
 })
@@ -83,7 +89,7 @@ progress callbacks.
 ```go
 diarize := true
 
-transcript, err := client.CreateTranscript(ctx, elevenlabs.CreateTranscriptRequest{
+transcript, err := client.CreateTranscript(ctx, speechtotext.CreateTranscriptRequest{
 	ModelID:      "scribe_v1",
 	SourceURL:    "https://example.com/interview.mp3",
 	LanguageCode: "en",
@@ -102,7 +108,7 @@ Use `SubmitTranscriptWebhook` when the transcript should be processed
 asynchronously by ElevenLabs:
 
 ```go
-resp, err := client.SubmitTranscriptWebhook(ctx, elevenlabs.CreateTranscriptRequest{
+resp, err := client.SubmitTranscriptWebhook(ctx, speechtotext.CreateTranscriptRequest{
 	ModelID:   "scribe_v1",
 	SourceURL: "https://example.com/audio.mp3",
 	WebhookID: "your-webhook-id",
@@ -122,7 +128,7 @@ fmt.Println(resp.TranscriptionID)
 Realtime transcription uses the package WebSocket session type:
 
 ```go
-session, err := client.ConnectRealtimeTranscript(ctx, elevenlabs.RealtimeTranscriptRequest{
+session, err := client.ConnectRealtimeTranscript(ctx, speechtotext.RealtimeTranscriptRequest{
 	ModelID:     "scribe_v1",
 	AudioFormat: "pcm_16000",
 })
@@ -131,7 +137,7 @@ if err != nil {
 }
 defer session.Close()
 
-if err := session.SendAudioChunk(elevenlabs.RealtimeAudioChunk{
+if err := session.SendAudioChunk(speechtotext.RealtimeAudioChunk{
 	Audio:      pcmBytes,
 	Commit:     true,
 	SampleRate: 16000,
@@ -202,14 +208,14 @@ Replayable requests retry transient status codes by default:
 Customize or disable retries with client options:
 
 ```go
-client := elevenlabs.NewClient(
+client := speechtotext.NewClient(
 	os.Getenv("ELEVENLABS_API_KEY"),
 	elevenlabs.WithRetryConfig(elevenlabs.RetryConfig{
 		MaxAttempts: 5,
 	}),
 )
 
-noRetryClient := elevenlabs.NewClient(
+noRetryClient := speechtotext.NewClient(
 	os.Getenv("ELEVENLABS_API_KEY"),
 	elevenlabs.WithoutRetries(),
 )
@@ -220,7 +226,7 @@ File uploads are retried only when the upload body can be replayed.
 ## Client Options
 
 ```go
-client := elevenlabs.NewClient(
+client := speechtotext.NewClient(
 	os.Getenv("ELEVENLABS_API_KEY"),
 	elevenlabs.WithHTTPClient(customHTTPClient),
 	elevenlabs.WithBaseURL("https://api.elevenlabs.io"),
@@ -248,5 +254,5 @@ git push origin v0.1.0
 Consumers can then depend on the module with:
 
 ```sh
-go get github.com/emiliopalmerini/elevenlabs-go@v0.1.0
+go get github.com/emiliopalmerini/elevenlabs-go@v0.2.0
 ```
