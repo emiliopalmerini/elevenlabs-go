@@ -2,8 +2,8 @@
 
 A small Go client for the ElevenLabs API.
 
-This module currently focuses on speech-to-text, text-to-speech, and a few
-account metadata endpoints:
+This module currently focuses on speech-to-text, text-to-speech, and account
+metadata endpoints:
 
 - create, retrieve, and delete transcripts
 - submit asynchronous transcript webhook jobs
@@ -13,7 +13,7 @@ account metadata endpoints:
 - stream text-to-speech audio over HTTP
 - stream text-to-speech input over single-context and multi-context WebSockets
 - list models
-- read authenticated user metadata
+- read authenticated user and subscription metadata
 - inspect API errors and raw HTTP response metadata
 - retry replayable transient failures
 
@@ -39,6 +39,12 @@ Text-to-speech APIs also live in their own subpackage:
 
 ```go
 import "github.com/emiliopalmerini/elevenlabs-go/texttospeech"
+```
+
+User APIs live in their own subpackage:
+
+```go
+import "github.com/emiliopalmerini/elevenlabs-go/user"
 ```
 
 ## Quick Start
@@ -185,6 +191,38 @@ if err != nil {
 }
 
 audio, err := event.AudioBytes()
+```
+
+## User
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/emiliopalmerini/elevenlabs-go/user"
+)
+
+func main() {
+	ctx := context.Background()
+	client := user.NewClient(os.Getenv("ELEVENLABS_API_KEY"))
+
+	account, err := client.Get(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	subscription, err := client.GetSubscription(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(account.UserID, subscription.Tier)
+}
 ```
 
 ## Advanced Transcript Options
