@@ -2,12 +2,16 @@
 
 A small Go client for the ElevenLabs API.
 
-This module currently focuses on speech-to-text workflows and a few account
-metadata endpoints:
+This module currently focuses on speech-to-text, text-to-speech, and a few
+account metadata endpoints:
 
 - create, retrieve, and delete transcripts
 - submit asynchronous transcript webhook jobs
 - stream audio to the realtime transcription WebSocket API
+- create text-to-speech audio
+- create text-to-speech audio with character timestamps
+- stream text-to-speech audio over HTTP
+- stream text-to-speech input over single-context and multi-context WebSockets
 - list models
 - read authenticated user metadata
 - inspect API errors and raw HTTP response metadata
@@ -29,6 +33,12 @@ Speech-to-text APIs live in their own subpackage:
 
 ```go
 import "github.com/emiliopalmerini/elevenlabs-go/speechtotext"
+```
+
+Text-to-speech APIs also live in their own subpackage:
+
+```go
+import "github.com/emiliopalmerini/elevenlabs-go/texttospeech"
 ```
 
 ## Quick Start
@@ -77,6 +87,104 @@ transcript, err := client.CreateTranscript(ctx, speechtotext.CreateTranscriptReq
 	ModelID:   "scribe_v1",
 	SourceURL: "https://example.com/audio.mp3",
 })
+```
+
+## Text to Speech
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+
+	"github.com/emiliopalmerini/elevenlabs-go/texttospeech"
+)
+
+func main() {
+	ctx := context.Background()
+	client := texttospeech.NewClient(os.Getenv("ELEVENLABS_API_KEY"))
+
+	audio, err := client.CreateSpeech(ctx, texttospeech.CreateSpeechRequest{
+		VoiceID:      "JBFqnCBsd6RMkjVDRZzb",
+		Text:         "The first move is what sets everything in motion.",
+		ModelID:      "eleven_multilingual_v2",
+		OutputFormat: "mp3_44100_128",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := os.WriteFile("speech.mp3", audio, 0o644); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+Timestamp-enabled generation returns base64 audio plus character alignment:
+
+```go
+timed, err := client.CreateSpeechWithTimestamps(ctx, texttospeech.CreateSpeechRequest{
+	VoiceID: "JBFqnCBsd6RMkjVDRZzb",
+	Text:    "Hello from ElevenLabs.",
+})
+if err != nil {
+	return err
+}
+
+audio, err := timed.Audio()
+if err != nil {
+	return err
+}
+
+fmt.Println(len(audio), timed.Alignment.Characters)
+```
+
+HTTP streaming methods return closeable streams:
+
+```go
+stream, err := client.StreamSpeech(ctx, texttospeech.CreateSpeechRequest{
+	VoiceID: "JBFqnCBsd6RMkjVDRZzb",
+	Text:    "Stream this text.",
+})
+if err != nil {
+	return err
+}
+defer stream.Close()
+
+_, err = io.Copy(output, stream)
+```
+
+WebSocket streaming uses explicit session messages:
+
+```go
+session, err := client.ConnectStreamInput(ctx, texttospeech.StreamInputRequest{
+	VoiceID:      "JBFqnCBsd6RMkjVDRZzb",
+	ModelID:      "eleven_flash_v2_5",
+	OutputFormat: "mp3_44100_128",
+})
+if err != nil {
+	return err
+}
+defer session.Close()
+
+if err := session.Initialize(texttospeech.StreamInitializeMessage{}); err != nil {
+	return err
+}
+if err := session.SendText(texttospeech.StreamTextMessage{Text: "Hello "}); err != nil {
+	return err
+}
+if err := session.Flush(""); err != nil {
+	return err
+}
+
+event, err := session.Receive()
+if err != nil {
+	return err
+}
+
+audio, err := event.AudioBytes()
 ```
 
 ## Advanced Transcript Options
