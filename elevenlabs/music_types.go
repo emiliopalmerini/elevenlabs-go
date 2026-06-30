@@ -36,6 +36,15 @@ type ComposeDetailedMusicRequest struct {
 	WithTimestamps          *bool                `json:"with_timestamps,omitempty"`
 }
 
+// CreateCompositionPlanRequest contains parameters for generating a music
+// composition plan.
+type CreateCompositionPlanRequest struct {
+	ModelID               MusicModelID         `json:"model_id,omitempty"`
+	MusicLengthMS         *int                 `json:"music_length_ms,omitempty"`
+	Prompt                string               `json:"prompt"`
+	SourceCompositionPlan MusicCompositionPlan `json:"source_composition_plan,omitempty"`
+}
+
 // MusicModelID identifies the music generation model.
 type MusicModelID string
 
