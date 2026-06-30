@@ -57,6 +57,29 @@ type VideoToMusicFile struct {
 	SizeBytes int64
 }
 
+// SeparateStemsRequest contains parameters for separating an audio file into
+// individual stems.
+type SeparateStemsRequest struct {
+	File            StemSeparationFile
+	OutputFormat    OutputFormat
+	StemVariationID StemVariationID
+	SignWithC2PA    *bool
+}
+
+// StemSeparationFile is an audio file upload for stem separation requests.
+type StemSeparationFile struct {
+	Name   string
+	Reader io.Reader
+}
+
+// StemVariationID identifies the stem separation variation to use.
+type StemVariationID string
+
+const (
+	StemVariationTwoStemsV1 StemVariationID = "two_stems_v1"
+	StemVariationSixStemsV1 StemVariationID = "six_stems_v1"
+)
+
 // CreateCompositionPlanRequest contains parameters for generating a music
 // composition plan.
 type CreateCompositionPlanRequest struct {
