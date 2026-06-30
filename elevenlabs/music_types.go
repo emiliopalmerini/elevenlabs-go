@@ -20,6 +20,22 @@ type ComposeMusicRequest struct {
 	StoreForInpainting      *bool                `json:"store_for_inpainting,omitempty"`
 }
 
+// ComposeDetailedMusicRequest contains parameters for ElevenLabs detailed music
+// composition requests.
+type ComposeDetailedMusicRequest struct {
+	CompositionPlan         MusicCompositionPlan `json:"composition_plan,omitempty"`
+	ForceInstrumental       *bool                `json:"force_instrumental,omitempty"`
+	ModelID                 MusicModelID         `json:"model_id,omitempty"`
+	MusicLengthMS           *int                 `json:"music_length_ms,omitempty"`
+	OutputFormat            string               `json:"-"`
+	Prompt                  string               `json:"prompt,omitempty"`
+	RespectSectionDurations *bool                `json:"respect_sections_durations,omitempty"`
+	Seed                    *int                 `json:"seed,omitempty"`
+	SignWithC2PA            *bool                `json:"sign_with_c2pa,omitempty"`
+	StoreForInpainting      *bool                `json:"store_for_inpainting,omitempty"`
+	WithTimestamps          *bool                `json:"with_timestamps,omitempty"`
+}
+
 // MusicModelID identifies the music generation model.
 type MusicModelID string
 
@@ -33,6 +49,24 @@ type MusicComposition struct {
 	Audio []byte
 	// SongID is read from the song-id response header.
 	SongID string
+}
+
+// DetailedMusicComposition is a generated music composition with metadata.
+type DetailedMusicComposition struct {
+	Audio           []byte
+	CompositionPlan MusicCompositionPlan
+	// SongID is read from the song-id response header.
+	SongID       string
+	SongMetadata *MusicSongMetadata
+}
+
+// MusicSongMetadata contains metadata returned by detailed music composition.
+type MusicSongMetadata struct {
+	Description string   `json:"description,omitempty"`
+	Genres      []string `json:"genres,omitempty"`
+	IsExplicit  bool     `json:"is_explicit,omitempty"`
+	Languages   []string `json:"languages,omitempty"`
+	Title       string   `json:"title,omitempty"`
 }
 
 // StreamMusicRequest contains parameters for ElevenLabs streaming music
