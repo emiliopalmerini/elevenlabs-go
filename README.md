@@ -12,6 +12,7 @@ account metadata endpoints:
 - create text-to-speech audio with character timestamps
 - stream text-to-speech audio over HTTP
 - stream text-to-speech input over single-context and multi-context WebSockets
+- create, list, update, retrieve, and delete Speech Engine resources
 - host a Speech Engine upstream WebSocket server
 - list models
 - read authenticated user and subscription metadata
@@ -258,6 +259,29 @@ fmt.Println(event.Text)
 
 The session can authenticate with the client API key or with a realtime token
 passed on `RealtimeTranscriptRequest.Token`.
+
+## Speech Engine
+
+Create or update Speech Engine resources with the configured upstream WebSocket
+URL, then host that URL with `SpeechEngineUpstreamServer`.
+
+```go
+engine, err := client.SpeechEngine.Create(ctx, elevenlabs.SpeechEngineCreateRequest{
+	Name: "Support",
+	SpeechEngine: elevenlabs.SpeechEngineConfig{
+		WSURL: "wss://example.com/speech-engine/upstream",
+	},
+	TTS: &elevenlabs.SpeechEngineTTSConfig{
+		ModelID: "eleven_flash_v2_5",
+		VoiceID: "voice_123",
+	},
+})
+if err != nil {
+	return err
+}
+
+fmt.Println(engine.SpeechEngineID)
+```
 
 ## Speech Engine Upstream
 
