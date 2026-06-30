@@ -16,6 +16,7 @@ func TestVerifySpeechEngineAuthorizationAcceptsValidToken(t *testing.T) {
 		"alg": "HS256",
 	}, map[string]any{
 		"exp": now.Add(time.Minute).Unix(),
+		"iat": now.Add(-time.Minute).Unix(),
 		"iss": speechEngineJWTIssuer,
 		"sub": speechEngineJWTSubject,
 	})
@@ -59,6 +60,7 @@ func TestVerifySpeechEngineAuthorizationRejectsInvalidTokens(t *testing.T) {
 				"alg": "none",
 			}, map[string]any{
 				"exp": now.Add(time.Minute).Unix(),
+				"iat": now.Add(-time.Minute).Unix(),
 				"iss": speechEngineJWTIssuer,
 				"sub": speechEngineJWTSubject,
 			}),
@@ -71,6 +73,7 @@ func TestVerifySpeechEngineAuthorizationRejectsInvalidTokens(t *testing.T) {
 				"alg": "HS256",
 			}, map[string]any{
 				"exp": now.Add(time.Minute).Unix(),
+				"iat": now.Add(-time.Minute).Unix(),
 				"iss": speechEngineJWTIssuer,
 				"sub": speechEngineJWTSubject,
 			}),
@@ -83,6 +86,7 @@ func TestVerifySpeechEngineAuthorizationRejectsInvalidTokens(t *testing.T) {
 				"alg": "HS256",
 			}, map[string]any{
 				"exp": now.Add(time.Minute).Unix(),
+				"iat": now.Add(-time.Minute).Unix(),
 				"iss": "https://example.com",
 				"sub": speechEngineJWTSubject,
 			}),
@@ -95,6 +99,7 @@ func TestVerifySpeechEngineAuthorizationRejectsInvalidTokens(t *testing.T) {
 				"alg": "HS256",
 			}, map[string]any{
 				"exp": now.Add(time.Minute).Unix(),
+				"iat": now.Add(-time.Minute).Unix(),
 				"iss": speechEngineJWTIssuer,
 				"sub": "wrong-subject",
 			}),
@@ -106,6 +111,7 @@ func TestVerifySpeechEngineAuthorizationRejectsInvalidTokens(t *testing.T) {
 			token: speechEngineTestJWT(t, "test-key", map[string]any{
 				"alg": "HS256",
 			}, map[string]any{
+				"iat": now.Add(-time.Minute).Unix(),
 				"iss": speechEngineJWTIssuer,
 				"sub": speechEngineJWTSubject,
 			}),
@@ -118,10 +124,36 @@ func TestVerifySpeechEngineAuthorizationRejectsInvalidTokens(t *testing.T) {
 				"alg": "HS256",
 			}, map[string]any{
 				"exp": now.Add(-61 * time.Second).Unix(),
+				"iat": now.Add(-time.Minute).Unix(),
 				"iss": speechEngineJWTIssuer,
 				"sub": speechEngineJWTSubject,
 			}),
 			wantErr: "expired",
+		},
+		{
+			apiKey: "test-key",
+			name:   "missing issued at",
+			token: speechEngineTestJWT(t, "test-key", map[string]any{
+				"alg": "HS256",
+			}, map[string]any{
+				"exp": now.Add(time.Minute).Unix(),
+				"iss": speechEngineJWTIssuer,
+				"sub": speechEngineJWTSubject,
+			}),
+			wantErr: "issued-at is required",
+		},
+		{
+			apiKey: "test-key",
+			name:   "issued at too far in future",
+			token: speechEngineTestJWT(t, "test-key", map[string]any{
+				"alg": "HS256",
+			}, map[string]any{
+				"exp": now.Add(time.Minute).Unix(),
+				"iat": now.Add(61 * time.Second).Unix(),
+				"iss": speechEngineJWTIssuer,
+				"sub": speechEngineJWTSubject,
+			}),
+			wantErr: "issued-at is in the future",
 		},
 	}
 
@@ -144,6 +176,7 @@ func TestVerifySpeechEngineAuthorizationAllowsClockSkew(t *testing.T) {
 		"alg": "HS256",
 	}, map[string]any{
 		"exp": now.Add(-60 * time.Second).Unix(),
+		"iat": now.Add(60 * time.Second).Unix(),
 		"iss": speechEngineJWTIssuer,
 		"sub": speechEngineJWTSubject,
 	})

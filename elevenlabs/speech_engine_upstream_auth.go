@@ -20,6 +20,7 @@ const (
 
 type speechEngineJWTClaims struct {
 	Exp json.Number `json:"exp"`
+	Iat json.Number `json:"iat"`
 	Iss string      `json:"iss"`
 	Sub string      `json:"sub"`
 }
@@ -91,6 +92,16 @@ func VerifySpeechEngineAuthorization(token, apiKey string, now time.Time) error 
 	}
 	if now.After(time.Unix(expUnix, 0).Add(speechEngineJWTClockSkew)) {
 		return errors.New("elevenlabs: speech engine authorization token has expired")
+	}
+	if claims.Iat == "" {
+		return errors.New("elevenlabs: speech engine authorization issued-at is required")
+	}
+	iatUnix, err := claims.Iat.Int64()
+	if err != nil {
+		return fmt.Errorf("elevenlabs: parse speech engine authorization issued-at: %w", err)
+	}
+	if time.Unix(iatUnix, 0).After(now.Add(speechEngineJWTClockSkew)) {
+		return errors.New("elevenlabs: speech engine authorization issued-at is in the future")
 	}
 
 	return nil

@@ -78,6 +78,7 @@ func TestSpeechEngineUpstreamServerAcceptsAuthorizedWebSocket(t *testing.T) {
 		"alg": "HS256",
 	}, map[string]any{
 		"exp": now.Add(time.Minute).Unix(),
+		"iat": now.Add(-time.Minute).Unix(),
 		"iss": speechEngineJWTIssuer,
 		"sub": speechEngineJWTSubject,
 	})
