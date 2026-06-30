@@ -23,6 +23,7 @@ type Client struct {
 	TTS    *TTSService
 	User   *UserService
 	Models *ModelsService
+	Music  *MusicService
 
 	apiKey      string
 	baseURL     string
@@ -59,6 +60,7 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 	c.TTS = &TTSService{client: c}
 	c.User = &UserService{client: c}
 	c.Models = &ModelsService{client: c}
+	c.Music = &MusicService{client: c}
 
 	return c
 }
