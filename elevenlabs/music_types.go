@@ -36,6 +36,27 @@ type ComposeDetailedMusicRequest struct {
 	WithTimestamps          *bool                `json:"with_timestamps,omitempty"`
 }
 
+// VideoToMusicRequest contains parameters for generating music from one or
+// more video files.
+type VideoToMusicRequest struct {
+	Videos       []VideoToMusicFile
+	Description  string
+	Tags         []string
+	ModelID      MusicModelID
+	OutputFormat OutputFormat
+	SignWithC2PA *bool
+}
+
+// VideoToMusicFile is a video file upload for video-to-music requests.
+type VideoToMusicFile struct {
+	Name   string
+	Reader io.Reader
+
+	// SizeBytes is optional and is used only for client-side total upload size
+	// validation when provided.
+	SizeBytes int64
+}
+
 // CreateCompositionPlanRequest contains parameters for generating a music
 // composition plan.
 type CreateCompositionPlanRequest struct {
