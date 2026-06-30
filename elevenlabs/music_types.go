@@ -1,5 +1,10 @@
 package elevenlabs
 
+import (
+	"errors"
+	"io"
+)
+
 // ComposeMusicRequest contains parameters for ElevenLabs music composition
 // requests.
 type ComposeMusicRequest struct {
@@ -28,6 +33,43 @@ type MusicComposition struct {
 	Audio []byte
 	// SongID is read from the song-id response header.
 	SongID string
+}
+
+// StreamMusicRequest contains parameters for ElevenLabs streaming music
+// composition requests.
+type StreamMusicRequest struct {
+	CompositionPlan    MusicCompositionPlan `json:"composition_plan,omitempty"`
+	ForceInstrumental  *bool                `json:"force_instrumental,omitempty"`
+	ModelID            MusicModelID         `json:"model_id,omitempty"`
+	MusicLengthMS      *int                 `json:"music_length_ms,omitempty"`
+	OutputFormat       string               `json:"-"`
+	Prompt             string               `json:"prompt,omitempty"`
+	Seed               *int                 `json:"seed,omitempty"`
+	StoreForInpainting *bool                `json:"store_for_inpainting,omitempty"`
+}
+
+// MusicStream is a streaming music composition response. The caller must close
+// it when finished reading.
+type MusicStream struct {
+	Body io.ReadCloser
+	// SongID is read from the song-id response header.
+	SongID string
+}
+
+// Read reads audio bytes from the response stream.
+func (s *MusicStream) Read(p []byte) (int, error) {
+	if s == nil || s.Body == nil {
+		return 0, errors.New("elevenlabs: nil music stream")
+	}
+	return s.Body.Read(p)
+}
+
+// Close closes the response stream.
+func (s *MusicStream) Close() error {
+	if s == nil || s.Body == nil {
+		return nil
+	}
+	return s.Body.Close()
 }
 
 // MusicCompositionPlan is the composition_plan request union. Use MusicPrompt
