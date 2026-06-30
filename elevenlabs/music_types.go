@@ -12,7 +12,7 @@ type ComposeMusicRequest struct {
 	ForceInstrumental       *bool                `json:"force_instrumental,omitempty"`
 	ModelID                 MusicModelID         `json:"model_id,omitempty"`
 	MusicLengthMS           *int                 `json:"music_length_ms,omitempty"`
-	OutputFormat            string               `json:"-"`
+	OutputFormat            OutputFormat         `json:"-"`
 	Prompt                  string               `json:"prompt,omitempty"`
 	RespectSectionDurations *bool                `json:"respect_sections_durations,omitempty"`
 	Seed                    *int                 `json:"seed,omitempty"`
@@ -27,7 +27,7 @@ type ComposeDetailedMusicRequest struct {
 	ForceInstrumental       *bool                `json:"force_instrumental,omitempty"`
 	ModelID                 MusicModelID         `json:"model_id,omitempty"`
 	MusicLengthMS           *int                 `json:"music_length_ms,omitempty"`
-	OutputFormat            string               `json:"-"`
+	OutputFormat            OutputFormat         `json:"-"`
 	Prompt                  string               `json:"prompt,omitempty"`
 	RespectSectionDurations *bool                `json:"respect_sections_durations,omitempty"`
 	Seed                    *int                 `json:"seed,omitempty"`
@@ -85,7 +85,7 @@ type StreamMusicRequest struct {
 	ForceInstrumental  *bool                `json:"force_instrumental,omitempty"`
 	ModelID            MusicModelID         `json:"model_id,omitempty"`
 	MusicLengthMS      *int                 `json:"music_length_ms,omitempty"`
-	OutputFormat       string               `json:"-"`
+	OutputFormat       OutputFormat         `json:"-"`
 	Prompt             string               `json:"prompt,omitempty"`
 	Seed               *int                 `json:"seed,omitempty"`
 	StoreForInpainting *bool                `json:"store_for_inpainting,omitempty"`

@@ -26,9 +26,9 @@ type CreateSpeechRequest struct {
 	ApplyTextNormalization          string                           `json:"apply_text_normalization,omitempty"`
 	ApplyLanguageTextNormalization  *bool                            `json:"apply_language_text_normalization,omitempty"`
 
-	EnableLogging            *bool  `json:"-"`
-	OptimizeStreamingLatency *int   `json:"-"`
-	OutputFormat             string `json:"-"`
+	EnableLogging            *bool        `json:"-"`
+	OptimizeStreamingLatency *int         `json:"-"`
+	OutputFormat             OutputFormat `json:"-"`
 }
 
 // VoiceSettings overrides stored voice settings for one request.

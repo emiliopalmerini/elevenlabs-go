@@ -21,7 +21,7 @@ type TTSStreamInputRequest struct {
 
 	EnableLogging          *bool
 	EnableSSMLParsing      *bool
-	OutputFormat           string
+	OutputFormat           OutputFormat
 	InactivityTimeout      *int
 	SyncAlignment          *bool
 	AutoMode               *bool

@@ -178,9 +178,10 @@ func (c *STTService) realtimeTranscriptEndpoint(core *Client, in RealtimeTranscr
 	return endpoint.String(), origin.String(), nil
 }
 
-func setStringQuery(query url.Values, name, value string) {
-	if strings.TrimSpace(value) != "" {
-		query.Set(name, value)
+func setStringQuery[T ~string](query url.Values, name string, value T) {
+	s := string(value)
+	if strings.TrimSpace(s) != "" {
+		query.Set(name, s)
 	}
 }
 
