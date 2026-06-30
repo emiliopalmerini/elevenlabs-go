@@ -292,69 +292,30 @@ WebSocket URL. Register a handler at the URL configured in your Speech Engine
 ```go
 server := elevenlabs.SpeechEngineUpstreamServer{
 	APIKey: os.Getenv("ELEVENLABS_API_KEY"),
-	Handler: func(ctx context.Context, session *elevenlabs.SpeechEngineUpstreamSession) error {
-		var cancelCurrent context.CancelFunc
-		defer func() {
-			if cancelCurrent != nil {
-				cancelCurrent()
-			}
-		}()
-
-		for {
-			message, err := session.Receive()
-			if err != nil {
-				return err
-			}
-
-			switch message.Type {
-			case elevenlabs.SpeechEngineMessageInit:
-				log.Printf("speech engine conversation started: %s", message.ConversationID)
-			case elevenlabs.SpeechEngineMessagePing:
-				if err := session.SendPong(); err != nil {
+	Handler: elevenlabs.NewManagedSpeechEngineUpstreamHandler(elevenlabs.SpeechEngineUpstreamHandlers{
+		OnInit: func(_ context.Context, conversationID string, _ *elevenlabs.SpeechEngineUpstreamSession) error {
+			log.Printf("speech engine conversation started: %s", conversationID)
+			return nil
+		},
+		OnTranscript: func(ctx context.Context, response *elevenlabs.SpeechEngineTranscriptResponse) error {
+			for chunk := range streamLLM(ctx, response.UserTranscript) {
+				if err := response.SendAgentResponse(ctx, chunk, false); err != nil {
 					return err
 				}
-			case elevenlabs.SpeechEngineMessageUserTranscript:
-				if cancelCurrent != nil {
-					cancelCurrent()
-				}
-
-				responseCtx, cancel := context.WithCancel(ctx)
-				cancelCurrent = cancel
-
-				go streamAgentResponse(responseCtx, session, message.EventID, message.UserTranscript)
-			case elevenlabs.SpeechEngineMessageClose:
-				return nil
-			case elevenlabs.SpeechEngineMessageError:
-				return fmt.Errorf("speech engine error: %s", message.Message)
 			}
-		}
-	},
+			return response.SendFinal(ctx)
+		},
+	}),
 }
 
 http.Handle("/speech-engine/upstream", server)
 log.Fatal(http.ListenAndServe(":8080", nil))
 ```
 
-Stream each LLM text chunk with the `event_id` from the latest
-`user_transcript`, then send a final empty response. If a newer transcript
-arrives, cancel the in-flight response; ElevenLabs discards any old event IDs.
-
-```go
-func streamAgentResponse(
-	ctx context.Context,
-	session *elevenlabs.SpeechEngineUpstreamSession,
-	eventID int64,
-	history []elevenlabs.SpeechEngineTranscriptMessage,
-) {
-	for chunk := range streamLLM(ctx, history) {
-		if err := session.SendAgentResponse(eventID, chunk, false); err != nil {
-			return
-		}
-	}
-
-	_ = session.SendAgentResponse(eventID, "", true)
-}
-```
+The managed handler auto-replies to pings, gives each transcript callback a
+context, cancels the previous transcript when a newer one arrives, and rejects
+stale writes. You can still use `SpeechEngineUpstreamSession.Receive`,
+`SendPong`, and `SendAgentResponse` directly when you need a lower-level loop.
 
 ## Response Metadata
 
