@@ -84,7 +84,7 @@ audio, err := client.TTS.CreateSpeech(ctx, elevenlabs.CreateSpeechRequest{
 	VoiceID:      "JBFqnCBsd6RMkjVDRZzb",
 	Text:         "The first move is what sets everything in motion.",
 	ModelID:      "eleven_multilingual_v2",
-	OutputFormat: "mp3_44100_128",
+	OutputFormat: elevenlabs.OutputFormatMP3_44100_128,
 })
 if err != nil {
 	return err
@@ -135,7 +135,7 @@ WebSocket streaming uses explicit session messages:
 session, err := client.TTS.ConnectStreamInput(ctx, elevenlabs.TTSStreamInputRequest{
 	VoiceID:      "JBFqnCBsd6RMkjVDRZzb",
 	ModelID:      "eleven_flash_v2_5",
-	OutputFormat: "mp3_44100_128",
+	OutputFormat: elevenlabs.OutputFormatMP3_44100_128,
 })
 if err != nil {
 	return err

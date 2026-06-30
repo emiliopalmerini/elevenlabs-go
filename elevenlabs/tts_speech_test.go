@@ -119,7 +119,7 @@ func TestCreateSpeechSendsJSONAndReturnsAudio(t *testing.T) {
 		ApplyLanguageTextNormalization: &applyLanguageNormalization,
 		EnableLogging:                  &enableLogging,
 		OptimizeStreamingLatency:       &latency,
-		OutputFormat:                   "mp3_44100_128",
+		OutputFormat:                   OutputFormatMP3_44100_128,
 	})
 	if err != nil {
 		t.Fatalf("CreateSpeechWithResponse returned error: %v", err)

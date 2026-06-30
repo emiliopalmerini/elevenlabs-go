@@ -18,7 +18,7 @@ func TestComposeMusicSendsJSONAndReturnsComposition(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("method = %s, want %s", r.Method, http.MethodPost)
 		}
-		if r.URL.RequestURI() != "/v1/music?output_format=mp3_48000_192" {
+		if r.URL.RequestURI() != "/v1/music?output_format=mp3_44100_192" {
 			t.Fatalf("request uri = %s, want output_format query", r.URL.RequestURI())
 		}
 		if got := r.Header.Get("xi-api-key"); got != "test-key" {
@@ -72,7 +72,7 @@ func TestComposeMusicSendsJSONAndReturnsComposition(t *testing.T) {
 		ForceInstrumental:       boolPtr(false),
 		ModelID:                 MusicModelV2,
 		MusicLengthMS:           intPtr(10_000),
-		OutputFormat:            "mp3_48000_192",
+		OutputFormat:            OutputFormatMP3_44100_192,
 		Prompt:                  "A cinematic synth pop track",
 		RespectSectionDurations: boolPtr(false),
 		Seed:                    intPtr(1234),

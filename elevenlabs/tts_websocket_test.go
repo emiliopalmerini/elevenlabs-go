@@ -115,7 +115,7 @@ func TestStreamInputSessionSendsMessagesAndReceivesAudio(t *testing.T) {
 		LanguageCode:           "en",
 		EnableLogging:          boolPtr(false),
 		EnableSSMLParsing:      boolPtr(true),
-		OutputFormat:           "mp3_44100_128",
+		OutputFormat:           OutputFormatMP3_44100_128,
 		InactivityTimeout:      intPtr(30),
 		SyncAlignment:          boolPtr(true),
 		AutoMode:               boolPtr(true),
