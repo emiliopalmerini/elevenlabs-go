@@ -24,6 +24,7 @@ type Client struct {
 	User         *UserService
 	Models       *ModelsService
 	Music        *MusicService
+	Voices       *VoicesService
 	SpeechEngine *SpeechEngineService
 
 	apiKey      string
@@ -62,6 +63,7 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 	c.User = &UserService{client: c}
 	c.Models = &ModelsService{client: c}
 	c.Music = &MusicService{client: c}
+	c.Voices = &VoicesService{client: c}
 	c.SpeechEngine = &SpeechEngineService{client: c}
 
 	return c
