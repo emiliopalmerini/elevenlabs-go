@@ -150,6 +150,60 @@ func (s *VoicesService) CreatePVCWithResponse(ctx context.Context, in CreatePVCV
 	}, nil
 }
 
+// UpdatePVC edits PVC voice metadata.
+func (s *VoicesService) UpdatePVC(ctx context.Context, voiceID string, in UpdatePVCVoiceRequest) (*UpdatePVCVoiceResponse, error) {
+	resp, err := s.UpdatePVCWithResponse(ctx, voiceID, in)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// UpdatePVCWithResponse edits PVC voice metadata and returns HTTP response
+// metadata.
+func (s *VoicesService) UpdatePVCWithResponse(ctx context.Context, voiceID string, in UpdatePVCVoiceRequest) (*Response[*UpdatePVCVoiceResponse], error) {
+	path, err := updatePVCVoicePath(voiceID)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateUpdatePVCVoiceRequest(in); err != nil {
+		return nil, err
+	}
+
+	core, err := s.apiClient()
+	if err != nil {
+		return nil, err
+	}
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("elevenlabs: encode update PVC voice request: %w", err)
+	}
+
+	build := func(ctx context.Context) (*http.Request, error) {
+		req, err := core.NewRequest(ctx, http.MethodPost, path, bytes.NewReader(payload))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		return req, nil
+	}
+
+	body, raw, err := core.Do(ctx, build, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var out UpdatePVCVoiceResponse
+	if err := DecodeResponse(body, &out); err != nil {
+		return nil, err
+	}
+
+	return &Response[*UpdatePVCVoiceResponse]{
+		Data:        &out,
+		RawResponse: raw,
+	}, nil
+}
+
 func (s *VoicesService) apiClient() (*Client, error) {
 	if s == nil || s.client == nil {
 		return nil, errors.New("elevenlabs: nil client")
@@ -192,8 +246,26 @@ func validateCreatePVCVoiceRequest(in CreatePVCVoiceRequest) error {
 	return nil
 }
 
+func validateUpdatePVCVoiceRequest(in UpdatePVCVoiceRequest) error {
+	if in.Name != "" && utf8.RuneCountInString(in.Name) > 100 {
+		return errors.New("elevenlabs: name must be 100 characters or fewer")
+	}
+	if in.Description != nil && utf8.RuneCountInString(*in.Description) > 500 {
+		return errors.New("elevenlabs: description must be 500 characters or fewer")
+	}
+	return nil
+}
+
 func createPVCVoicePath() string {
 	return "/v1/voices/pvc"
+}
+
+func updatePVCVoicePath(voiceID string) (string, error) {
+	voiceID = strings.TrimSpace(voiceID)
+	if voiceID == "" {
+		return "", errors.New("elevenlabs: voice_id is required")
+	}
+	return "/v1/voices/pvc/" + url.PathEscape(voiceID), nil
 }
 
 func sharedVoicesPath(in ListSharedVoicesRequest) string {

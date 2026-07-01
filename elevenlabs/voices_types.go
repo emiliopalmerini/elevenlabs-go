@@ -68,6 +68,19 @@ type CreatePVCVoiceResponse struct {
 	VoiceID string `json:"voice_id"`
 }
 
+// UpdatePVCVoiceRequest contains metadata updates for a PVC voice.
+type UpdatePVCVoiceRequest struct {
+	Description *string           `json:"description,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Language    string            `json:"language,omitempty"`
+	Name        string            `json:"name,omitempty"`
+}
+
+// UpdatePVCVoiceResponse is returned after updating a PVC voice.
+type UpdatePVCVoiceResponse struct {
+	VoiceID string `json:"voice_id"`
+}
+
 // SharedVoiceCategory is the category assigned to a shared voice.
 type SharedVoiceCategory string
 

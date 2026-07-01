@@ -185,6 +185,27 @@ if err != nil {
 fmt.Println(added.VoiceID)
 ```
 
+PVC voice metadata can also be created and updated:
+
+```go
+pvc, err := client.Voices.CreatePVC(ctx, elevenlabs.CreatePVCVoiceRequest{
+	Name:     "Narrator",
+	Language: "en",
+})
+if err != nil {
+	return err
+}
+
+updated, err := client.Voices.UpdatePVC(ctx, pvc.VoiceID, elevenlabs.UpdatePVCVoiceRequest{
+	Name: "Narrator Updated",
+})
+if err != nil {
+	return err
+}
+
+fmt.Println(updated.VoiceID)
+```
+
 ## User And Models
 
 ```go

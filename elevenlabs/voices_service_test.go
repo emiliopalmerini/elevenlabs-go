@@ -3,6 +3,7 @@ package elevenlabs
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -507,6 +508,160 @@ func TestVoicesCreatePVCValidatesDocumentedFields(t *testing.T) {
 			_, err := client.Voices.CreatePVC(ctx, tt.in)
 			if err == nil {
 				t.Fatal("CreatePVC returned nil error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want containing %q", err.Error(), tt.want)
+			}
+		})
+	}
+
+	if requests.Load() != 0 {
+		t.Fatalf("requests = %d, want 0", requests.Load())
+	}
+}
+
+func TestVoicesUpdatePVCSendsJSONAndParsesResponse(t *testing.T) {
+	ctx := context.Background()
+	description := "Updated narration voice"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want %s", r.Method, http.MethodPost)
+		}
+		if r.URL.EscapedPath() != "/v1/voices/pvc/voice%2Fid" {
+			t.Fatalf("path = %s, want escaped update PVC voice path", r.URL.EscapedPath())
+		}
+		if got := r.Header.Get("xi-api-key"); got != "test-key" {
+			t.Fatalf("xi-api-key = %q, want test-key", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Fatalf("Content-Type = %q, want application/json", got)
+		}
+
+		var body UpdatePVCVoiceRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if body.Description == nil || *body.Description != "Updated narration voice" {
+			t.Fatalf("Description = %#v, want Updated narration voice", body.Description)
+		}
+		if body.Labels["accent"] != "american" || body.Labels["gender"] != "male" {
+			t.Fatalf("Labels = %#v, want accent and gender labels", body.Labels)
+		}
+		if body.Language != "en" {
+			t.Fatalf("Language = %q, want en", body.Language)
+		}
+		if body.Name != "John Smith Updated" {
+			t.Fatalf("Name = %q, want John Smith Updated", body.Name)
+		}
+
+		w.Header().Set("X-Request-ID", "req_update_pvc")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"voice_id":"b38kUX8pkfYO2kHyqfFy"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.Voices.UpdatePVCWithResponse(ctx, "voice/id", UpdatePVCVoiceRequest{
+		Description: &description,
+		Labels: map[string]string{
+			"accent": "american",
+			"gender": "male",
+		},
+		Language: "en",
+		Name:     "John Smith Updated",
+	})
+	if err != nil {
+		t.Fatalf("UpdatePVCWithResponse returned error: %v", err)
+	}
+	if resp.Data.VoiceID != "b38kUX8pkfYO2kHyqfFy" {
+		t.Fatalf("VoiceID = %q, want b38kUX8pkfYO2kHyqfFy", resp.Data.VoiceID)
+	}
+	if resp.RawResponse.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want %d", resp.RawResponse.StatusCode, http.StatusOK)
+	}
+	if resp.RawResponse.Header.Get("X-Request-ID") != "req_update_pvc" {
+		t.Fatalf("X-Request-ID = %q, want req_update_pvc", resp.RawResponse.Header.Get("X-Request-ID"))
+	}
+}
+
+func TestVoicesUpdatePVCAllowsEmptyRequest(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		if strings.TrimSpace(string(body)) != "{}" {
+			t.Fatalf("body = %q, want {}", body)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"voice_id":"b38kUX8pkfYO2kHyqfFy"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.Voices.UpdatePVC(ctx, "voice_id", UpdatePVCVoiceRequest{})
+	if err != nil {
+		t.Fatalf("UpdatePVC returned error: %v", err)
+	}
+	if resp.VoiceID != "b38kUX8pkfYO2kHyqfFy" {
+		t.Fatalf("VoiceID = %q, want b38kUX8pkfYO2kHyqfFy", resp.VoiceID)
+	}
+}
+
+func TestVoicesUpdatePVCValidatesDocumentedFields(t *testing.T) {
+	ctx := context.Background()
+	var requests atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"voice_id":"unexpected"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	tooLongDescription := strings.Repeat("d", 501)
+
+	tests := []struct {
+		in      UpdatePVCVoiceRequest
+		name    string
+		voiceID string
+		want    string
+	}{
+		{
+			in:      UpdatePVCVoiceRequest{},
+			name:    "voice id required",
+			voiceID: " ",
+			want:    "voice_id is required",
+		},
+		{
+			in: UpdatePVCVoiceRequest{
+				Name: strings.Repeat("n", 101),
+			},
+			name:    "name max length",
+			voiceID: "voice_id",
+			want:    "name must be 100 characters or fewer",
+		},
+		{
+			in: UpdatePVCVoiceRequest{
+				Description: &tooLongDescription,
+			},
+			name:    "description max length",
+			voiceID: "voice_id",
+			want:    "description must be 500 characters or fewer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.Voices.UpdatePVC(ctx, tt.voiceID, tt.in)
+			if err == nil {
+				t.Fatal("UpdatePVC returned nil error")
 			}
 			if !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("error = %q, want containing %q", err.Error(), tt.want)
