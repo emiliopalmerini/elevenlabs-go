@@ -1,10 +1,15 @@
 package elevenlabs
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 )
 
 // VoicesService provides ElevenLabs voice APIs.
@@ -41,11 +46,154 @@ func (s *VoicesService) ListSharedWithResponse(ctx context.Context, in ListShare
 	}, nil
 }
 
+// AddShared adds a shared voice to the authenticated user's voice collection.
+func (s *VoicesService) AddShared(ctx context.Context, publicUserID, voiceID string, in AddSharedVoiceRequest) (*AddSharedVoiceResponse, error) {
+	resp, err := s.AddSharedWithResponse(ctx, publicUserID, voiceID, in)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// AddSharedWithResponse adds a shared voice to the authenticated user's voice
+// collection and returns HTTP response metadata.
+func (s *VoicesService) AddSharedWithResponse(ctx context.Context, publicUserID, voiceID string, in AddSharedVoiceRequest) (*Response[*AddSharedVoiceResponse], error) {
+	path, err := addSharedVoicePath(publicUserID, voiceID)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAddSharedVoiceRequest(in); err != nil {
+		return nil, err
+	}
+
+	core, err := s.apiClient()
+	if err != nil {
+		return nil, err
+	}
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("elevenlabs: encode add shared voice request: %w", err)
+	}
+
+	build := func(ctx context.Context) (*http.Request, error) {
+		req, err := core.NewRequest(ctx, http.MethodPost, path, bytes.NewReader(payload))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		return req, nil
+	}
+
+	body, raw, err := core.Do(ctx, build, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var out AddSharedVoiceResponse
+	if err := DecodeResponse(body, &out); err != nil {
+		return nil, err
+	}
+
+	return &Response[*AddSharedVoiceResponse]{
+		Data:        &out,
+		RawResponse: raw,
+	}, nil
+}
+
+// CreatePVC creates a PVC voice with metadata but no samples.
+func (s *VoicesService) CreatePVC(ctx context.Context, in CreatePVCVoiceRequest) (*CreatePVCVoiceResponse, error) {
+	resp, err := s.CreatePVCWithResponse(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// CreatePVCWithResponse creates a PVC voice with metadata but no samples and
+// returns HTTP response metadata.
+func (s *VoicesService) CreatePVCWithResponse(ctx context.Context, in CreatePVCVoiceRequest) (*Response[*CreatePVCVoiceResponse], error) {
+	if err := validateCreatePVCVoiceRequest(in); err != nil {
+		return nil, err
+	}
+
+	core, err := s.apiClient()
+	if err != nil {
+		return nil, err
+	}
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("elevenlabs: encode create PVC voice request: %w", err)
+	}
+
+	build := func(ctx context.Context) (*http.Request, error) {
+		req, err := core.NewRequest(ctx, http.MethodPost, createPVCVoicePath(), bytes.NewReader(payload))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		return req, nil
+	}
+
+	body, raw, err := core.Do(ctx, build, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var out CreatePVCVoiceResponse
+	if err := DecodeResponse(body, &out); err != nil {
+		return nil, err
+	}
+
+	return &Response[*CreatePVCVoiceResponse]{
+		Data:        &out,
+		RawResponse: raw,
+	}, nil
+}
+
 func (s *VoicesService) apiClient() (*Client, error) {
 	if s == nil || s.client == nil {
 		return nil, errors.New("elevenlabs: nil client")
 	}
 	return s.client, nil
+}
+
+func addSharedVoicePath(publicUserID, voiceID string) (string, error) {
+	publicUserID = strings.TrimSpace(publicUserID)
+	if publicUserID == "" {
+		return "", errors.New("elevenlabs: public_user_id is required")
+	}
+	voiceID = strings.TrimSpace(voiceID)
+	if voiceID == "" {
+		return "", errors.New("elevenlabs: voice_id is required")
+	}
+	return "/v1/voices/add/" + url.PathEscape(publicUserID) + "/" + url.PathEscape(voiceID), nil
+}
+
+func validateAddSharedVoiceRequest(in AddSharedVoiceRequest) error {
+	if strings.TrimSpace(in.NewName) == "" {
+		return errors.New("elevenlabs: new_name is required")
+	}
+	return nil
+}
+
+func validateCreatePVCVoiceRequest(in CreatePVCVoiceRequest) error {
+	if strings.TrimSpace(in.Name) == "" {
+		return errors.New("elevenlabs: name is required")
+	}
+	if utf8.RuneCountInString(in.Name) > 100 {
+		return errors.New("elevenlabs: name must be 100 characters or fewer")
+	}
+	if strings.TrimSpace(in.Language) == "" {
+		return errors.New("elevenlabs: language is required")
+	}
+	if in.Description != nil && utf8.RuneCountInString(*in.Description) > 500 {
+		return errors.New("elevenlabs: description must be 500 characters or fewer")
+	}
+	return nil
+}
+
+func createPVCVoicePath() string {
+	return "/v1/voices/pvc"
 }
 
 func sharedVoicesPath(in ListSharedVoicesRequest) string {

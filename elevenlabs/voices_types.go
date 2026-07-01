@@ -42,6 +42,32 @@ type ListSharedVoicesRequest struct {
 	UseCases             []string
 }
 
+// AddSharedVoiceRequest contains the JSON body for adding a shared voice to
+// the authenticated user's voice collection.
+type AddSharedVoiceRequest struct {
+	Bookmarked *bool  `json:"bookmarked,omitempty"`
+	NewName    string `json:"new_name"`
+}
+
+// AddSharedVoiceResponse is returned after adding a shared voice.
+type AddSharedVoiceResponse struct {
+	VoiceID string `json:"voice_id"`
+}
+
+// CreatePVCVoiceRequest contains metadata for creating a PVC voice without
+// samples.
+type CreatePVCVoiceRequest struct {
+	Description *string           `json:"description,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Language    string            `json:"language"`
+	Name        string            `json:"name"`
+}
+
+// CreatePVCVoiceResponse is returned after creating a PVC voice.
+type CreatePVCVoiceResponse struct {
+	VoiceID string `json:"voice_id"`
+}
+
 // SharedVoiceCategory is the category assigned to a shared voice.
 type SharedVoiceCategory string
 

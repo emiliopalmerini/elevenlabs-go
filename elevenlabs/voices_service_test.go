@@ -2,8 +2,11 @@ package elevenlabs
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -180,6 +183,339 @@ func TestVoicesListSharedWithResponseReturnsRawMetadata(t *testing.T) {
 	}
 	if resp.RawResponse.URL != server.URL+"/v1/shared-voices" {
 		t.Fatalf("URL = %q, want %s/v1/shared-voices", resp.RawResponse.URL, server.URL)
+	}
+}
+
+func TestVoicesAddSharedSendsJSONAndParsesResponse(t *testing.T) {
+	ctx := context.Background()
+	bookmarked := false
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want %s", r.Method, http.MethodPost)
+		}
+		if r.URL.EscapedPath() != "/v1/voices/add/public%2Fuser/voice%2Fid" {
+			t.Fatalf("path = %s, want escaped add shared voice path", r.URL.EscapedPath())
+		}
+		if got := r.Header.Get("xi-api-key"); got != "test-key" {
+			t.Fatalf("xi-api-key = %q, want test-key", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Fatalf("Content-Type = %q, want application/json", got)
+		}
+
+		var body AddSharedVoiceRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if body.NewName != "John Smith" {
+			t.Fatalf("NewName = %q, want John Smith", body.NewName)
+		}
+		if body.Bookmarked == nil || *body.Bookmarked {
+			t.Fatalf("Bookmarked = %#v, want false", body.Bookmarked)
+		}
+
+		w.Header().Set("X-Request-ID", "req_add_shared")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"voice_id":"b38kUX8pkfYO2kHyqfFy"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.Voices.AddSharedWithResponse(ctx, "public/user", "voice/id", AddSharedVoiceRequest{
+		Bookmarked: &bookmarked,
+		NewName:    "John Smith",
+	})
+	if err != nil {
+		t.Fatalf("AddSharedWithResponse returned error: %v", err)
+	}
+	if resp.Data.VoiceID != "b38kUX8pkfYO2kHyqfFy" {
+		t.Fatalf("VoiceID = %q, want b38kUX8pkfYO2kHyqfFy", resp.Data.VoiceID)
+	}
+	if resp.RawResponse.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want %d", resp.RawResponse.StatusCode, http.StatusOK)
+	}
+	if resp.RawResponse.Header.Get("X-Request-ID") != "req_add_shared" {
+		t.Fatalf("X-Request-ID = %q, want req_add_shared", resp.RawResponse.Header.Get("X-Request-ID"))
+	}
+}
+
+func TestVoicesAddSharedOmitsNilBookmarked(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if _, ok := body["bookmarked"]; ok {
+			t.Fatalf("bookmarked present in body %#v, want omitted", body)
+		}
+		if body["new_name"] != "John Smith" {
+			t.Fatalf("new_name = %q, want John Smith", body["new_name"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"voice_id":"b38kUX8pkfYO2kHyqfFy"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.Voices.AddShared(ctx, "public_user_id", "voice_id", AddSharedVoiceRequest{
+		NewName: "John Smith",
+	})
+	if err != nil {
+		t.Fatalf("AddShared returned error: %v", err)
+	}
+	if resp.VoiceID != "b38kUX8pkfYO2kHyqfFy" {
+		t.Fatalf("VoiceID = %q, want b38kUX8pkfYO2kHyqfFy", resp.VoiceID)
+	}
+}
+
+func TestVoicesAddSharedValidatesRequiredFields(t *testing.T) {
+	ctx := context.Background()
+	var requests atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"voice_id":"unexpected"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	tests := []struct {
+		name         string
+		publicUserID string
+		voiceID      string
+		in           AddSharedVoiceRequest
+		want         string
+	}{
+		{
+			name:         "public user id",
+			publicUserID: " ",
+			voiceID:      "voice_id",
+			in:           AddSharedVoiceRequest{NewName: "John Smith"},
+			want:         "public_user_id is required",
+		},
+		{
+			name:         "voice id",
+			publicUserID: "public_user_id",
+			voiceID:      " ",
+			in:           AddSharedVoiceRequest{NewName: "John Smith"},
+			want:         "voice_id is required",
+		},
+		{
+			name:         "new name",
+			publicUserID: "public_user_id",
+			voiceID:      "voice_id",
+			in:           AddSharedVoiceRequest{NewName: " "},
+			want:         "new_name is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.Voices.AddShared(ctx, tt.publicUserID, tt.voiceID, tt.in)
+			if err == nil {
+				t.Fatal("AddShared returned nil error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want containing %q", err.Error(), tt.want)
+			}
+		})
+	}
+
+	if requests.Load() != 0 {
+		t.Fatalf("requests = %d, want 0", requests.Load())
+	}
+}
+
+func TestVoicesCreatePVCSendsJSONAndParsesResponse(t *testing.T) {
+	ctx := context.Background()
+	description := "Warm narration voice"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want %s", r.Method, http.MethodPost)
+		}
+		if r.URL.Path != "/v1/voices/pvc" {
+			t.Fatalf("path = %s, want /v1/voices/pvc", r.URL.Path)
+		}
+		if got := r.Header.Get("xi-api-key"); got != "test-key" {
+			t.Fatalf("xi-api-key = %q, want test-key", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Fatalf("Content-Type = %q, want application/json", got)
+		}
+
+		var body CreatePVCVoiceRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if body.Description == nil || *body.Description != "Warm narration voice" {
+			t.Fatalf("Description = %#v, want Warm narration voice", body.Description)
+		}
+		if body.Labels["accent"] != "american" || body.Labels["gender"] != "male" {
+			t.Fatalf("Labels = %#v, want accent and gender labels", body.Labels)
+		}
+		if body.Language != "en" {
+			t.Fatalf("Language = %q, want en", body.Language)
+		}
+		if body.Name != "John Smith" {
+			t.Fatalf("Name = %q, want John Smith", body.Name)
+		}
+
+		w.Header().Set("X-Request-ID", "req_create_pvc")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"voice_id":"b38kUX8pkfYO2kHyqfFy"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.Voices.CreatePVCWithResponse(ctx, CreatePVCVoiceRequest{
+		Description: &description,
+		Labels: map[string]string{
+			"accent": "american",
+			"gender": "male",
+		},
+		Language: "en",
+		Name:     "John Smith",
+	})
+	if err != nil {
+		t.Fatalf("CreatePVCWithResponse returned error: %v", err)
+	}
+	if resp.Data.VoiceID != "b38kUX8pkfYO2kHyqfFy" {
+		t.Fatalf("VoiceID = %q, want b38kUX8pkfYO2kHyqfFy", resp.Data.VoiceID)
+	}
+	if resp.RawResponse.StatusCode != http.StatusOK {
+		t.Fatalf("StatusCode = %d, want %d", resp.RawResponse.StatusCode, http.StatusOK)
+	}
+	if resp.RawResponse.Header.Get("X-Request-ID") != "req_create_pvc" {
+		t.Fatalf("X-Request-ID = %q, want req_create_pvc", resp.RawResponse.Header.Get("X-Request-ID"))
+	}
+}
+
+func TestVoicesCreatePVCOmitsOptionalFields(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if _, ok := body["description"]; ok {
+			t.Fatalf("description present in body %#v, want omitted", body)
+		}
+		if _, ok := body["labels"]; ok {
+			t.Fatalf("labels present in body %#v, want omitted", body)
+		}
+		if body["language"] != "en" {
+			t.Fatalf("language = %q, want en", body["language"])
+		}
+		if body["name"] != "John Smith" {
+			t.Fatalf("name = %q, want John Smith", body["name"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"voice_id":"b38kUX8pkfYO2kHyqfFy"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+
+	resp, err := client.Voices.CreatePVC(ctx, CreatePVCVoiceRequest{
+		Language: "en",
+		Name:     "John Smith",
+	})
+	if err != nil {
+		t.Fatalf("CreatePVC returned error: %v", err)
+	}
+	if resp.VoiceID != "b38kUX8pkfYO2kHyqfFy" {
+		t.Fatalf("VoiceID = %q, want b38kUX8pkfYO2kHyqfFy", resp.VoiceID)
+	}
+}
+
+func TestVoicesCreatePVCValidatesDocumentedFields(t *testing.T) {
+	ctx := context.Background()
+	var requests atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"voice_id":"unexpected"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithHTTPClient(server.Client()))
+	tooLongDescription := strings.Repeat("d", 501)
+
+	tests := []struct {
+		in   CreatePVCVoiceRequest
+		name string
+		want string
+	}{
+		{
+			in:   CreatePVCVoiceRequest{Language: "en"},
+			name: "name required",
+			want: "name is required",
+		},
+		{
+			in: CreatePVCVoiceRequest{
+				Language: "en",
+				Name:     " ",
+			},
+			name: "name cannot be blank",
+			want: "name is required",
+		},
+		{
+			in: CreatePVCVoiceRequest{
+				Language: "en",
+				Name:     strings.Repeat("n", 101),
+			},
+			name: "name max length",
+			want: "name must be 100 characters or fewer",
+		},
+		{
+			in:   CreatePVCVoiceRequest{Name: "John Smith"},
+			name: "language required",
+			want: "language is required",
+		},
+		{
+			in: CreatePVCVoiceRequest{
+				Language: " ",
+				Name:     "John Smith",
+			},
+			name: "language cannot be blank",
+			want: "language is required",
+		},
+		{
+			in: CreatePVCVoiceRequest{
+				Description: &tooLongDescription,
+				Language:    "en",
+				Name:        "John Smith",
+			},
+			name: "description max length",
+			want: "description must be 500 characters or fewer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.Voices.CreatePVC(ctx, tt.in)
+			if err == nil {
+				t.Fatal("CreatePVC returned nil error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want containing %q", err.Error(), tt.want)
+			}
+		})
+	}
+
+	if requests.Load() != 0 {
+		t.Fatalf("requests = %d, want 0", requests.Load())
 	}
 }
 
