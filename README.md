@@ -12,6 +12,7 @@ account metadata endpoints:
 - create text-to-speech audio with character timestamps
 - stream text-to-speech audio over HTTP
 - stream text-to-speech input over single-context and multi-context WebSockets
+- list shared voices and add shared voices to your voice collection
 - create, list, update, retrieve, and delete Speech Engine resources
 - host a Speech Engine upstream WebSocket server
 - list models
@@ -160,6 +161,28 @@ if err != nil {
 }
 
 audio, err := event.AudioBytes()
+```
+
+## Voice Library
+
+Shared voices can be searched and added to your voice collection:
+
+```go
+voices, err := client.Voices.ListShared(ctx, elevenlabs.ListSharedVoicesRequest{
+	Search: "narration",
+})
+if err != nil {
+	return err
+}
+
+added, err := client.Voices.AddShared(ctx, voices.Voices[0].PublicOwnerID, voices.Voices[0].VoiceID, elevenlabs.AddSharedVoiceRequest{
+	NewName: "Narrator",
+})
+if err != nil {
+	return err
+}
+
+fmt.Println(added.VoiceID)
 ```
 
 ## User And Models
